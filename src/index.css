@@ -36,11 +36,15 @@
       var(--color-accent) 0%,
       var(--color-accent-2) 100%
     );
+    /* Tells the browser to render native controls (date/time pickers,
+       scrollbars, select menus) in dark style to match our dark theme. */
+    color-scheme: dark;
   }
 }
 
 /* Light theme */
 :root.light {
+  color-scheme: light;
   --color-bg: #fbfbfd;
   --color-surface: #ffffff;
   --color-surface-2: #f2f2f6;
