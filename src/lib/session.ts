@@ -1,6 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-
-const POLL_INTERVAL_MS = 12_000;
 import type { Todo } from "./types";
 import { api } from "./api";
 import { clearAllTodos, mergeServerTodos } from "./db";
@@ -70,8 +68,9 @@ export interface SyncHandle {
 }
 
 /**
- * On sign-in, pull todos from server. Polls every POLL_INTERVAL_MS while
- * signed in. Returns a handle for a manual sync trigger + loading state.
+ * On sign-in, pull todos from server. Also pulls whenever the tab regains
+ * visibility (cheap: fires only when the user actually switches back).
+ * Returns a handle for a manual sync trigger + loading state.
  */
 export function usePullOnLogin(
   status: AuthStatus,
@@ -81,6 +80,7 @@ export function usePullOnLogin(
   const [syncing, setSyncing] = useState(false);
 
   const pull = useCallback(async () => {
+    if (!navigator.onLine) return;
     setSyncing(true);
     try {
       const todos = await api.getTodos();
@@ -98,19 +98,20 @@ export function usePullOnLogin(
       pulledFor.current = null;
       return;
     }
-    if (status !== "in" || !email || !navigator.onLine) return;
+    if (status !== "in" || !email) return;
     if (pulledFor.current === email) return;
     pulledFor.current = email;
     pull();
   }, [status, email, pull]);
 
-  // Background poll while signed in.
+  // Pull when the tab comes back into focus — no polling needed.
   useEffect(() => {
     if (status !== "in" || !email) return;
-    const id = window.setInterval(() => {
-      if (navigator.onLine) pull();
-    }, POLL_INTERVAL_MS);
-    return () => window.clearInterval(id);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") pull();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
   }, [status, email, pull]);
 
   return { syncing, syncNow: pull };
