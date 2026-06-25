@@ -148,6 +148,35 @@ app works fully without them, and AI never gates creating/saving a todo.
   silently on quota/error; respect privacy (only send task text, opt-out
   available); keep within Workers AI free allowance.
 
+### 4.9 Durable git backup & recovery (later stage)
+The primary state store (D1 / a device) could be lost. To guarantee tasks are
+never lost, the system continuously mirrors a full snapshot into a **separate
+private GitHub repo** (`nudge-backup`). Git history then doubles as versioned,
+point-in-time disaster recovery.
+
+- **What's backed up**: the complete dataset — every todo (incl. completed and
+  soft-deleted tombstones), all reminders, tags, recurrence rules, and the
+  minimal user record. Enough to rebuild state from scratch with nothing else.
+- **Format** (machine-first, human-readable):
+  - `data/todos.json` — canonical full snapshot (array of todos, all fields).
+  - `data/meta.json` — `{ schemaVersion, exportedAt, appVersion, counts }`.
+  - `TASKS.md` — generated human-readable view of open tasks + reminders.
+- **Cadence**: pushed by the Cloudflare Worker (a) debounced after meaningful
+  changes and (b) on a daily cron as a floor. Each push is one commit, so the
+  git log is the recovery timeline.
+- **Auth**: a fine-grained GitHub PAT (write scope, **only** the backup repo)
+  stored as a Worker secret. Commits via the GitHub REST API — no checkout
+  needed in the Worker.
+- **Recovery**: the backup repo carries its own `README.md` (schema + manual
+  restore) and `AGENTS.md` (step-by-step instructions for an AI agent to rebuild
+  the running app's state from `data/todos.json`). Restore = import the latest
+  (or any historical) `todos.json` back into D1 / IndexedDB.
+- **Independence**: the backup is decoupled from the live store and from device
+  sync — if Cloudflare, D1, or all devices vanish, the repo alone is sufficient
+  to fully reconstruct tasks and reminders.
+- **Privacy**: private repo; contains personal task text. Treated as sensitive;
+  PAT least-privilege; optional client-side encryption is a future option.
+
 ## 5. Non-functional requirements
 
 - **Cost**: stays within Cloudflare + email-provider free tiers for one user.
@@ -241,10 +270,14 @@ Resolved:
    IndexedDB, responsive UI, PWA install. No account, no sync. Fully usable.
 2. **v1 — Reminders while open + email:** in-app notifications; backend +
    magic-link auth + email reminders via cron.
-3. **v2 — Sync:** multi-device auto-sync with conflict handling.
-4. **v3 — Web push:** reminders that fire with the app closed.
-5. **v4 — AI enhancements (§4.8):** Workers AI auto-tagging first, then optional
+3. **v2 — Durable git backup (§4.9):** mirror full state to a private
+   `nudge-backup` repo (debounced + daily). Cheap insurance; lands as soon as
+   the server holds the dataset.
+4. **v3 — Sync:** multi-device auto-sync with conflict handling.
+5. **v4 — Web push:** reminders that fire with the app closed.
+6. **v5 — AI enhancements (§4.8):** Workers AI auto-tagging first, then optional
    smart date parsing / suggestions. Introduces tags into the UI.
-6. **v5 — Google Calendar sync (§4.7):** OAuth + one-way sync; 6am daily agenda
+7. **v6 — Google Calendar sync (§4.7):** OAuth + one-way sync; 6am daily agenda
    block + per-time blocks for timed tasks.
-7. **Later:** SMS (optional/paid), lock-screen widget, two-way calendar sync.
+8. **Later:** SMS (optional/paid), lock-screen widget, two-way calendar sync,
+   encrypted backups.
