@@ -28,6 +28,9 @@ export const api = {
 
   logout: () => req<{ ok: true }>("/api/auth/logout", { method: "POST" }),
 
+  /** Pull all of the signed-in user's todos from the server. */
+  getTodos: () => req<{ todos: Todo[] }>("/api/todos").then((r) => r.todos),
+
   /** One-way upsert of todos (+ computed reminder fire times) to the server. */
   push: (todos: Todo[]) =>
     req<{ ok: true; count: number }>("/api/todos/push", {

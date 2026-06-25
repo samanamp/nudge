@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Todo } from "./types";
 import { api } from "./api";
+import { clearAllTodos, mergeServerTodos } from "./db";
 
 export type AuthStatus = "loading" | "in" | "out";
+
+const EMAIL_KEY = "nudge_email";
 
 export interface Session {
   status: AuthStatus;
@@ -11,19 +14,37 @@ export interface Session {
   logout: () => Promise<void>;
 }
 
-/** Tracks the signed-in user via the session cookie. */
+/**
+ * Tracks the signed-in user. Optimistic + offline-safe: we remember the last
+ * known email locally so a temporary network failure doesn't bounce a
+ * signed-in user back to the login screen (offline-first stays intact). Only a
+ * definitive `me() === null` (server reachable, no session) signs out.
+ */
 export function useSession(): Session {
-  const [email, setEmail] = useState<string | null>(null);
-  const [status, setStatus] = useState<AuthStatus>("loading");
+  const remembered = () => localStorage.getItem(EMAIL_KEY);
+  const [email, setEmail] = useState<string | null>(remembered);
+  const [status, setStatus] = useState<AuthStatus>(
+    remembered() ? "in" : "loading",
+  );
 
   const refresh = useCallback(() => {
     api
       .me()
       .then(({ email }) => {
-        setEmail(email);
-        setStatus(email ? "in" : "out");
+        if (email) {
+          localStorage.setItem(EMAIL_KEY, email);
+          setEmail(email);
+          setStatus("in");
+        } else {
+          localStorage.removeItem(EMAIL_KEY);
+          setEmail(null);
+          setStatus("out");
+        }
       })
-      .catch(() => setStatus("out"));
+      .catch(() => {
+        // Server unreachable (offline): trust the remembered session.
+        setStatus(remembered() ? "in" : "out");
+      });
   }, []);
 
   useEffect(() => {
@@ -32,11 +53,30 @@ export function useSession(): Session {
 
   const logout = useCallback(async () => {
     await api.logout().catch(() => {});
+    localStorage.removeItem(EMAIL_KEY);
+    await clearAllTodos(); // data lives on the server; pulled back on next login
     setEmail(null);
     setStatus("out");
   }, []);
 
   return { status, email, refresh, logout };
+}
+
+/** On sign-in (and when online), pull the user's todos into the local store. */
+export function usePullOnLogin(status: AuthStatus, email: string | null): void {
+  const pulledFor = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (status !== "in" || !email || !navigator.onLine) return;
+    if (pulledFor.current === email) return;
+    pulledFor.current = email;
+    api
+      .getTodos()
+      .then(mergeServerTodos)
+      .catch(() => {
+        pulledFor.current = null; // allow a retry later
+      });
+  }, [status, email]);
 }
 
 /**
@@ -49,7 +89,6 @@ export function usePushSync(todos: Todo[], enabled: boolean): void {
 
   useEffect(() => {
     if (!enabled || !navigator.onLine) return;
-    // Signature of reminder-relevant fields; skip pushes that change nothing.
     const sig = JSON.stringify(
       todos.map((t) => [
         t.id,

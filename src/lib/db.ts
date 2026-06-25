@@ -81,6 +81,28 @@ async function lowestSortOrder(): Promise<number> {
   return first?.sortOrder ?? 0;
 }
 
+/** Wipe the local store (used on sign-out — data lives on the server). */
+export async function clearAllTodos(): Promise<void> {
+  await db.todos.clear();
+}
+
+/**
+ * Merge server todos into the local store on sign-in (newer-wins per record).
+ * Never deletes local-only items — unsynced offline edits survive and get
+ * pushed up separately.
+ */
+export async function mergeServerTodos(serverTodos: Todo[]): Promise<void> {
+  await db.transaction("rw", db.todos, async () => {
+    for (const s of serverTodos) {
+      if (!s?.id) continue;
+      const local = await db.todos.get(s.id);
+      if (!local || (s.updatedAt ?? 0) > (local.updatedAt ?? 0)) {
+        await db.todos.put(s);
+      }
+    }
+  });
+}
+
 /** Purge completed todos older than 30 days (retention policy). */
 export async function purgeOldCompleted(): Promise<void> {
   const cutoff = now() - 30 * 86_400_000;

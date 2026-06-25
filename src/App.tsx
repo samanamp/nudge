@@ -5,13 +5,14 @@ import { db, purgeOldCompleted, toggleComplete } from "@/lib/db";
 import type { Todo } from "@/lib/types";
 import { groupTodos } from "@/lib/grouping";
 import { useTheme } from "@/lib/useTheme";
-import { useSession, usePushSync } from "@/lib/session";
+import { useSession, usePushSync, usePullOnLogin } from "@/lib/session";
 import { useInAppReminders } from "@/lib/notify";
 import { QuickAdd } from "@/components/QuickAdd";
 import { TodoRow } from "@/components/TodoRow";
 import { EditDialog } from "@/components/EditDialog";
 import { CommandPalette } from "@/components/CommandPalette";
 import { AccountMenu } from "@/components/AccountMenu";
+import { SignInScreen } from "@/components/SignInScreen";
 
 export default function App() {
   const [theme, toggleTheme] = useTheme();
@@ -26,7 +27,8 @@ export default function App() {
     [] as Todo[],
   );
 
-  // Server sync (one-way) for reminders, + in-app notifications while open.
+  // Pull todos on sign-in; push changes + in-app notifications while open.
+  usePullOnLogin(session.status, session.email);
   usePushSync(todos, session.status === "in");
   useInAppReminders(todos);
 
@@ -87,6 +89,16 @@ export default function App() {
   }, [flat, selected, editing]);
 
   const open = todos.filter((t) => !t.completedAt).length;
+
+  // Auth gate. `loading` avoids a sign-in flash while we revalidate the session.
+  if (session.status === "loading") {
+    return (
+      <div className="grid min-h-full place-items-center">
+        <div className="size-6 animate-spin rounded-full border-2 border-[var(--color-border-strong)] border-t-[var(--color-accent)]" />
+      </div>
+    );
+  }
+  if (session.status === "out") return <SignInScreen />;
 
   return (
     <div className="mx-auto flex min-h-full max-w-2xl flex-col px-4 sm:px-6">

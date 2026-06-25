@@ -1,28 +1,21 @@
 import { useState } from "react";
-import { Bell, LogOut, Mail, User, X, Check } from "lucide-react";
+import { Bell, LogOut, User, X, Check } from "lucide-react";
 import type { Session } from "@/lib/session";
-import { api } from "@/lib/api";
 import { requestNotifyPermission } from "@/lib/notify";
-import { cn } from "@/lib/cn";
 
+/** Signed-in account sheet: identity, notifications, sign out. */
 export function AccountMenu({ session }: { session: Session }) {
   const [open, setOpen] = useState(false);
-  const signedIn = session.status === "in";
 
   return (
     <>
       <button
         onClick={() => setOpen(true)}
-        title={signedIn ? (session.email ?? "Account") : "Sign in"}
-        className={cn(
-          "flex items-center gap-1.5 rounded-lg px-2 py-2 text-[var(--color-text-dim)] transition-colors hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]",
-          signedIn && "text-[var(--color-text)]",
-        )}
+        title={session.email ?? "Account"}
+        className="flex items-center gap-1.5 rounded-lg px-2 py-2 text-[var(--color-text)] transition-colors hover:bg-[var(--color-surface-2)]"
       >
         <User className="size-4" />
-        {signedIn && (
-          <span className="size-1.5 rounded-full bg-emerald-400" title="Signed in" />
-        )}
+        <span className="size-1.5 rounded-full bg-emerald-400" title="Signed in" />
       </button>
 
       {open && (
@@ -45,69 +38,11 @@ export function AccountMenu({ session }: { session: Session }) {
                 <X className="size-4" />
               </button>
             </div>
-
-            {signedIn ? (
-              <SignedIn session={session} />
-            ) : (
-              <SignIn onDone={session.refresh} />
-            )}
+            <SignedIn session={session} />
           </div>
         </div>
       )}
     </>
-  );
-}
-
-function SignIn({ onDone }: { onDone: () => void }) {
-  const [email, setEmail] = useState("");
-  const [sent, setSent] = useState(false);
-  const [busy, setBusy] = useState(false);
-
-  const submit = async () => {
-    if (!email.trim()) return;
-    setBusy(true);
-    await api.requestLink(email.trim()).catch(() => {});
-    setBusy(false);
-    setSent(true);
-    onDone();
-  };
-
-  if (sent) {
-    return (
-      <div className="py-2 text-center">
-        <div className="mx-auto mb-3 grid size-10 place-items-center rounded-full bg-[var(--color-surface-2)]">
-          <Mail className="size-5 text-[var(--color-accent)]" />
-        </div>
-        <p className="text-sm font-medium">Check your email</p>
-        <p className="mt-1 text-xs text-[var(--color-text-faint)]">
-          We sent a sign-in link to {email}. It expires in 15 minutes.
-        </p>
-      </div>
-    );
-  }
-
-  return (
-    <div>
-      <p className="mb-3 text-xs text-[var(--color-text-dim)]">
-        Sign in to sync and get email reminders. No password — we email you a link.
-      </p>
-      <input
-        type="email"
-        value={email}
-        autoFocus
-        placeholder="you@example.com"
-        onChange={(e) => setEmail(e.target.value)}
-        onKeyDown={(e) => e.key === "Enter" && submit()}
-        className="mb-3 h-10 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 text-sm outline-none focus:border-[var(--color-accent)]"
-      />
-      <button
-        onClick={submit}
-        disabled={busy || !email.trim()}
-        className="h-10 w-full rounded-lg bg-[var(--color-accent)] text-sm font-medium text-[var(--color-accent-fg)] disabled:opacity-50"
-      >
-        {busy ? "Sending…" : "Email me a link"}
-      </button>
-    </div>
   );
 }
 
