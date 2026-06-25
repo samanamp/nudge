@@ -1,11 +1,21 @@
-import { useState } from "react";
-import { Bell, LogOut, User, X, Check } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Bell, LogOut, User, X, Check, Calendar } from "lucide-react";
 import type { Session } from "@/lib/session";
 import { requestAndSubscribePush } from "@/lib/notify";
 
-/** Signed-in account sheet: identity, notifications, sign out. */
+/** Signed-in account sheet: identity, notifications, calendar, sign out. */
 export function AccountMenu({ session }: { session: Session }) {
   const [open, setOpen] = useState(false);
+
+  // Show a brief "connected" flash when returning from Google OAuth.
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search);
+    const gcal = sp.get("gcal");
+    if (gcal) {
+      window.history.replaceState({}, "", window.location.pathname);
+      if (gcal === "connected") setOpen(true);
+    }
+  }, []);
 
   return (
     <>
@@ -50,6 +60,19 @@ function SignedIn({ session }: { session: Session }) {
   const [perm, setPerm] = useState(
     typeof Notification !== "undefined" ? Notification.permission : "denied",
   );
+  const [gcal, setGcal] = useState<"loading" | "connected" | "disconnected">("loading");
+
+  useEffect(() => {
+    fetch("/api/auth/google/status", { credentials: "include" })
+      .then((r) => r.json() as Promise<{ connected: boolean }>)
+      .then((d) => setGcal(d.connected ? "connected" : "disconnected"))
+      .catch(() => setGcal("disconnected"));
+  }, []);
+
+  const disconnectGcal = async () => {
+    await fetch("/api/auth/google/disconnect", { method: "POST", credentials: "include" });
+    setGcal("disconnected");
+  };
 
   return (
     <div className="space-y-3">
@@ -78,6 +101,26 @@ function SignedIn({ session }: { session: Session }) {
           </>
         )}
       </button>
+
+      {gcal !== "loading" && (
+        gcal === "connected" ? (
+          <button
+            onClick={disconnectGcal}
+            className="flex w-full items-center gap-2 rounded-lg border border-[var(--color-border)] px-3 py-2.5 text-sm text-[var(--color-text-dim)] hover:border-[var(--color-border-strong)] hover:text-[var(--color-danger)]"
+          >
+            <Check className="size-4 text-emerald-400" />
+            Google Calendar connected
+            <span className="ml-auto text-[11px] opacity-60">Disconnect</span>
+          </button>
+        ) : (
+          <a
+            href="/api/auth/google"
+            className="flex w-full items-center gap-2 rounded-lg border border-[var(--color-border)] px-3 py-2.5 text-sm text-[var(--color-text-dim)] hover:border-[var(--color-border-strong)] hover:text-[var(--color-text)]"
+          >
+            <Calendar className="size-4" /> Connect Google Calendar
+          </a>
+        )
+      )}
 
       <button
         onClick={session.logout}

@@ -13,6 +13,7 @@ import {
 import { runDueReminders } from "./reminders";
 import { backupToGitHub } from "./backup";
 import { suggestTags } from "./ai";
+import { exchangeCode, googleAuthUrl, syncCalendar } from "./gcal";
 
 export interface Env {
   DB: D1Database;
@@ -25,6 +26,8 @@ export interface Env {
   VAPID_PUBLIC_KEY?: string;
   VAPID_PRIVATE_KEY?: string;
   AI?: Ai;
+  GOOGLE_CLIENT_ID?: string;
+  GOOGLE_CLIENT_SECRET?: string;
 }
 
 /** Reminder as pushed by the client, with a client-computed absolute fire time. */
@@ -147,11 +150,74 @@ async function route(req: Request, env: Env, url: URL, ctx: ExecutionContext): P
   if (p === "/api/todos/push" && method === "POST") {
     const { todos } = await req.json<{ todos: PushItem[] }>();
     await pushTodos(env, userId, todos ?? []);
-    // Run AI synchronously so tags come back in this response — no extra sync needed.
-    // 5 s hard timeout; tags for timed-out todos are retried on the next push.
+    // AI tagging: synchronous so tags arrive in this response.
     const tags = await autoTagSync(env, userId, todos ?? []);
-    ctx.waitUntil(backupToGitHub(env).catch((e) => console.error("backup error:", e)));
+    // Calendar + backup in background (non-blocking).
+    ctx.waitUntil(
+      Promise.all([
+        backupToGitHub(env).catch((e) => console.error("backup error:", e)),
+        syncCalendar(env, userId, (todos ?? []).map((i) => i.todo as unknown as Parameters<typeof syncCalendar>[2][number])).catch((e) => console.error("gcal error:", e)),
+      ]),
+    );
     return json({ ok: true, count: todos?.length ?? 0, tags });
+  }
+
+  // ── Google Calendar OAuth ───────────────────────────────────────────
+  if (p === "/api/auth/google" && method === "GET") {
+    const { nanoid } = await import("nanoid");
+    const state = nanoid(16);
+    // Stash state in a short-lived cookie to verify on callback.
+    const url = googleAuthUrl(env, state);
+    return new Response(null, {
+      status: 302,
+      headers: {
+        Location: url,
+        "Set-Cookie": `gcal_state=${state}; Path=/; HttpOnly; SameSite=Lax; Max-Age=300`,
+      },
+    });
+  }
+
+  if (p === "/api/auth/google/callback" && method === "GET") {
+    const code = url.searchParams.get("code");
+    const state = url.searchParams.get("state");
+    const cookieState = req.headers.get("Cookie")?.match(/gcal_state=([^;]+)/)?.[1];
+    if (!code || !state || state !== cookieState) {
+      return Response.redirect(`${env.APP_URL}/?gcal=error`, 302);
+    }
+    try {
+      const tokens = await exchangeCode(env, code);
+      if (tokens.refresh_token) {
+        await env.DB.prepare("UPDATE users SET google_refresh_token = ? WHERE id = ?")
+          .bind(tokens.refresh_token, userId)
+          .run();
+      }
+    } catch (e) {
+      console.error("gcal oauth error:", e);
+      return Response.redirect(`${env.APP_URL}/?gcal=error`, 302);
+    }
+    return new Response(null, {
+      status: 302,
+      headers: {
+        Location: `${env.APP_URL}/?gcal=connected`,
+        "Set-Cookie": "gcal_state=; Path=/; HttpOnly; Max-Age=0",
+      },
+    });
+  }
+
+  if (p === "/api/auth/google/disconnect" && method === "POST") {
+    await env.DB.prepare("UPDATE users SET google_refresh_token = NULL WHERE id = ?")
+      .bind(userId)
+      .run();
+    return json({ ok: true });
+  }
+
+  if (p === "/api/auth/google/status" && method === "GET") {
+    const row = await env.DB.prepare(
+      "SELECT google_refresh_token FROM users WHERE id = ?",
+    )
+      .bind(userId)
+      .first<{ google_refresh_token: string | null }>();
+    return json({ connected: !!row?.google_refresh_token });
   }
 
   // ── Push notifications ──────────────────────────────────────────────
