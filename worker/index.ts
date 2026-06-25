@@ -2,10 +2,13 @@ import {
   clearCookie,
   consumeMagicLink,
   currentUser,
+  getUser,
   makeSession,
+  registerPassword,
   requestMagicLink,
   sessionCookie,
   userIdForEmail,
+  verifyPassword,
 } from "./auth";
 import { runDueReminders } from "./reminders";
 
@@ -27,7 +30,8 @@ interface PushReminder {
   stop?: "on_complete" | "at_due";
   nextFireAt?: number;
 }
-interface PushTodo {
+/** Full todo (stored verbatim) — kept loose; the client owns the shape. */
+interface StoredTodo {
   id: string;
   title: string;
   notes?: string;
@@ -35,7 +39,10 @@ interface PushTodo {
   completedAt?: number;
   deletedAt?: number;
   updatedAt: number;
-  reminders?: PushReminder[];
+}
+interface PushItem {
+  todo: StoredTodo;
+  scheduled?: PushReminder[];
 }
 
 const json = (data: unknown, init?: ResponseInit) =>
@@ -91,6 +98,31 @@ async function route(req: Request, env: Env, url: URL): Promise<Response> {
     });
   }
 
+  if (p === "/api/auth/signup" && method === "POST") {
+    const { email, password } = await req.json<{ email?: string; password?: string }>();
+    if (!email || !password)
+      return json({ error: "email and password required" }, { status: 400 });
+    const ok = await registerPassword(env, email, password);
+    if (!ok)
+      return json(
+        { error: "account exists or password too short (min 8)" },
+        { status: 409 },
+      );
+    const session = await makeSession(env, email.trim().toLowerCase());
+    return json({ ok: true }, { headers: { "Set-Cookie": sessionCookie(session) } });
+  }
+
+  if (p === "/api/auth/login" && method === "POST") {
+    const { email, password } = await req.json<{ email?: string; password?: string }>();
+    if (!email || !password)
+      return json({ error: "email and password required" }, { status: 400 });
+    const user = await getUser(env, email);
+    if (!user?.password_hash || !(await verifyPassword(password, user.password_hash)))
+      return json({ error: "invalid credentials" }, { status: 401 });
+    const session = await makeSession(env, email.trim().toLowerCase());
+    return json({ ok: true }, { headers: { "Set-Cookie": sessionCookie(session) } });
+  }
+
   if (p === "/api/auth/me" && method === "GET") {
     const email = await currentUser(env, req);
     return json({ email });
@@ -107,7 +139,7 @@ async function route(req: Request, env: Env, url: URL): Promise<Response> {
   if (!userId) return json({ error: "unauthorized" }, { status: 401 });
 
   if (p === "/api/todos/push" && method === "POST") {
-    const { todos } = await req.json<{ todos: PushTodo[] }>();
+    const { todos } = await req.json<{ todos: PushItem[] }>();
     await pushTodos(env, userId, todos ?? []);
     return json({ ok: true, count: todos?.length ?? 0 });
   }
@@ -125,13 +157,14 @@ async function route(req: Request, env: Env, url: URL): Promise<Response> {
   return json({ error: "not found" }, { status: 404 });
 }
 
-/** One-way upsert: store each todo and rebuild its reminder schedule. */
+/** One-way upsert: store each (full) todo and rebuild its reminder schedule. */
 async function pushTodos(
   env: Env,
   userId: string,
-  todos: PushTodo[],
+  items: PushItem[],
 ): Promise<void> {
-  for (const t of todos) {
+  for (const { todo: t, scheduled } of items) {
+    if (!t?.id) continue;
     await env.DB.prepare(
       `INSERT INTO todos (id, user_id, data, due_at, completed_at, deleted_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -158,7 +191,7 @@ async function pushTodos(
     const active = !t.completedAt && !t.deletedAt;
     if (!active) continue;
 
-    for (const r of t.reminders ?? []) {
+    for (const r of scheduled ?? []) {
       if (r.nextFireAt == null) continue;
       await env.DB.prepare(
         `INSERT INTO reminders

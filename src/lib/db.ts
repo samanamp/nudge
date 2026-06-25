@@ -93,14 +93,27 @@ export async function clearAllTodos(): Promise<void> {
  */
 export async function mergeServerTodos(serverTodos: Todo[]): Promise<void> {
   await db.transaction("rw", db.todos, async () => {
-    for (const s of serverTodos) {
-      if (!s?.id) continue;
+    for (const raw of serverTodos) {
+      if (!raw?.id) continue;
+      const s = normalizeTodo(raw);
       const local = await db.todos.get(s.id);
       if (!local || (s.updatedAt ?? 0) > (local.updatedAt ?? 0)) {
         await db.todos.put(s);
       }
     }
   });
+}
+
+/** Backfill any missing fields so a partial record can never crash rendering. */
+function normalizeTodo(s: Todo): Todo {
+  return {
+    ...s,
+    recurrence: s.recurrence ?? noRecurrence(),
+    reminders: Array.isArray(s.reminders) ? s.reminders : [],
+    sortOrder: s.sortOrder ?? 0,
+    createdAt: s.createdAt ?? s.updatedAt ?? Date.now(),
+    updatedAt: s.updatedAt ?? Date.now(),
+  };
 }
 
 /** Purge completed todos older than 30 days (retention policy). */

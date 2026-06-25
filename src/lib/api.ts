@@ -28,24 +28,30 @@ export const api = {
 
   logout: () => req<{ ok: true }>("/api/auth/logout", { method: "POST" }),
 
+  signup: (email: string, password: string) =>
+    req<{ ok: true }>("/api/auth/signup", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    }),
+
+  login: (email: string, password: string) =>
+    req<{ ok: true }>("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    }),
+
   /** Pull all of the signed-in user's todos from the server. */
   getTodos: () => req<{ todos: Todo[] }>("/api/todos").then((r) => r.todos),
 
-  /** One-way upsert of todos (+ computed reminder fire times) to the server. */
+  /**
+   * One-way upsert to the server. Sends the *full* todo (so a later pull is
+   * loss-less) plus client-computed absolute reminder fire times.
+   */
   push: (todos: Todo[]) =>
     req<{ ok: true; count: number }>("/api/todos/push", {
       method: "POST",
       body: JSON.stringify({
-        todos: todos.map((t) => ({
-          id: t.id,
-          title: t.title,
-          notes: t.notes,
-          dueAt: t.dueAt,
-          completedAt: t.completedAt,
-          deletedAt: t.deletedAt,
-          updatedAt: t.updatedAt,
-          reminders: scheduleReminders(t),
-        })),
+        todos: todos.map((t) => ({ todo: t, scheduled: scheduleReminders(t) })),
       }),
     }),
 };

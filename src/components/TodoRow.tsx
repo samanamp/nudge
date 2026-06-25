@@ -15,7 +15,7 @@ interface Props {
 
 export function TodoRow({ todo, selected, onSelect, onOpen }: Props) {
   const done = !!todo.completedAt;
-  const recurs = todo.recurrence.freq !== "none";
+  const recurs = (todo.recurrence?.freq ?? "none") !== "none";
   const overdue = todo.dueAt !== undefined && !done && isOverdue(todo.dueAt);
   const hasNag = todo.reminders.some((r) => r.type === "recurring");
   const hasReminder = todo.reminders.length > 0;

@@ -92,3 +92,80 @@ export async function userIdForEmail(
     .first<{ id: string }>();
   return row?.id ?? null;
 }
+
+// ── Password auth (PBKDF2 via Web Crypto) ──────────────────────────────
+
+const enc = new TextEncoder();
+const b64 = (b: Uint8Array) => btoa(String.fromCharCode(...b));
+const fromB64 = (s: string) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+
+async function pbkdf2(pw: string, salt: Uint8Array, iter: number): Promise<Uint8Array> {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    enc.encode(pw) as BufferSource,
+    "PBKDF2",
+    false,
+    ["deriveBits"],
+  );
+  const bits = await crypto.subtle.deriveBits(
+    { name: "PBKDF2", salt: salt as BufferSource, iterations: iter, hash: "SHA-256" },
+    key,
+    256,
+  );
+  return new Uint8Array(bits);
+}
+
+export async function hashPassword(pw: string): Promise<string> {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const hash = await pbkdf2(pw, salt, 100_000);
+  return `pbkdf2$100000$${b64(salt)}$${b64(hash)}`;
+}
+
+export async function verifyPassword(pw: string, stored: string): Promise<boolean> {
+  const [scheme, iter, salt, hash] = stored.split("$");
+  if (scheme !== "pbkdf2") return false;
+  const got = await pbkdf2(pw, fromB64(salt), Number(iter));
+  const want = fromB64(hash);
+  if (got.length !== want.length) return false;
+  let diff = 0;
+  for (let i = 0; i < got.length; i++) diff |= got[i] ^ want[i];
+  return diff === 0;
+}
+
+interface UserRow {
+  id: string;
+  password_hash: string | null;
+}
+
+export async function getUser(env: Env, email: string): Promise<UserRow | null> {
+  return env.DB.prepare("SELECT id, password_hash FROM users WHERE email = ?")
+    .bind(email.trim().toLowerCase())
+    .first<UserRow>();
+}
+
+/** Create a user (or set a password on a passwordless one). Returns false on conflict. */
+export async function registerPassword(
+  env: Env,
+  email: string,
+  password: string,
+): Promise<boolean> {
+  const normalized = email.trim().toLowerCase();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(normalized)) return false;
+  if (password.length < 8) return false;
+
+  const hash = await hashPassword(password);
+  const existing = await getUser(env, normalized);
+  if (existing) {
+    if (existing.password_hash) return false; // already has a password
+    await env.DB.prepare("UPDATE users SET password_hash = ? WHERE id = ?")
+      .bind(hash, existing.id)
+      .run();
+    return true;
+  }
+  await env.DB.prepare(
+    "INSERT INTO users (id, email, password_hash, created_at) VALUES (?, ?, ?, ?)",
+  )
+    .bind(newId(), normalized, hash, Date.now())
+    .run();
+  return true;
+}

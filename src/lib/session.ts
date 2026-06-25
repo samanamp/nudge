@@ -67,6 +67,11 @@ export function usePullOnLogin(status: AuthStatus, email: string | null): void {
   const pulledFor = useRef<string | null>(null);
 
   useEffect(() => {
+    // Reset on logout so the next sign-in always pulls fresh data.
+    if (status === "out") {
+      pulledFor.current = null;
+      return;
+    }
     if (status !== "in" || !email || !navigator.onLine) return;
     if (pulledFor.current === email) return;
     pulledFor.current = email;

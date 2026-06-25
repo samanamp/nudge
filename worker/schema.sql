@@ -2,9 +2,10 @@
 -- Server-side copy of todos + derived reminders, plus auth tables.
 
 CREATE TABLE IF NOT EXISTS users (
-  id         TEXT PRIMARY KEY,
-  email      TEXT NOT NULL UNIQUE,
-  created_at INTEGER NOT NULL
+  id            TEXT PRIMARY KEY,
+  email         TEXT NOT NULL UNIQUE,
+  password_hash TEXT,
+  created_at    INTEGER NOT NULL
 );
 
 -- Single-use, short-lived magic-link tokens.

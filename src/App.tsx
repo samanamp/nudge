@@ -98,7 +98,7 @@ export default function App() {
       </div>
     );
   }
-  if (session.status === "out") return <SignInScreen />;
+  if (session.status === "out") return <SignInScreen onAuthed={session.refresh} />;
 
   return (
     <div className="mx-auto flex min-h-full max-w-2xl flex-col px-4 sm:px-6">

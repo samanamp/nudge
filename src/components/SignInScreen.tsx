@@ -2,7 +2,7 @@ import { Check } from "lucide-react";
 import { SignInForm } from "./SignInForm";
 
 /** Full-page sign-in gate shown when signed out. */
-export function SignInScreen() {
+export function SignInScreen({ onAuthed }: { onAuthed?: () => void }) {
   return (
     <div className="flex min-h-full items-center justify-center px-5">
       <div className="w-full max-w-sm">
@@ -21,7 +21,7 @@ export function SignInScreen() {
             Sign in to access your tasks and reminders. No password — we email you
             a link.
           </p>
-          <SignInForm />
+          <SignInForm onAuthed={onAuthed} />
         </div>
 
         <p className="mt-6 text-center text-[11px] text-[var(--color-text-faint)]">
