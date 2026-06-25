@@ -18,7 +18,7 @@ export async function suggestTags(
   notes?: string,
 ): Promise<string[]> {
   try {
-    const result = (await ai.run("@cf/meta/llama-3.1-8b-instruct", {
+    const result = (await ai.run("@cf/zai-org/glm-4.7-flash", {
       messages: [{ role: "user", content: PROMPT(title, notes) }],
       max_tokens: 24,
     })) as AiTextResult;

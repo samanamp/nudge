@@ -205,21 +205,44 @@ async function route(req: Request, env: Env, url: URL, ctx: ExecutionContext): P
   return json({ error: "not found" }, { status: 404 });
 }
 
-/** Auto-tag todos that don't have tags yet using Workers AI. */
+/** Auto-tag todos that don't have tags yet using Workers AI.
+ *  Cost controls:
+ *  - Skip any todo whose push payload already carries tags (client already has them).
+ *  - Batch-query D1 once for the rest to catch server-side tags not yet pulled.
+ *  - AI is called only for the genuinely untagged remainder.
+ */
 async function autoTagTodos(env: Env, userId: string, items: PushItem[]): Promise<void> {
   if (!env.AI) return;
-  for (const { todo: t } of items) {
-    if (!t?.id || t.deletedAt || t.completedAt) continue;
-    const row = await env.DB.prepare(
-      "SELECT data FROM todos WHERE id = ? AND user_id = ?",
-    )
-      .bind(t.id, userId)
-      .first<{ data: string }>();
-    if (!row) continue;
-    const data = JSON.parse(row.data) as StoredTodo & { tags?: string[] };
-    if (data.tags && data.tags.length > 0) continue; // already tagged
+
+  // 1. Candidates: active todos without tags in the push payload.
+  type TaggedItem = PushItem & { todo: StoredTodo & { tags?: string[] } };
+  const candidates = (items as TaggedItem[]).filter(
+    ({ todo: t }) => t?.id && !t.deletedAt && !t.completedAt && !(t.tags && t.tags.length > 0),
+  );
+  if (candidates.length === 0) return;
+
+  // 2. Batch-check D1 — one query for all candidates.
+  const ids = candidates.map(({ todo }) => todo.id);
+  const placeholders = ids.map(() => "?").join(",");
+  const rows = await env.DB.prepare(
+    `SELECT id, data FROM todos WHERE id IN (${placeholders}) AND user_id = ?`,
+  )
+    .bind(...ids, userId)
+    .all<{ id: string; data: string }>();
+
+  const serverData = new Map(
+    (rows.results ?? []).map((r) => [r.id, JSON.parse(r.data) as StoredTodo & { tags?: string[] }]),
+  );
+
+  // 3. Call AI only for todos that have no tags anywhere.
+  for (const { todo: t } of candidates) {
+    const data = serverData.get(t.id);
+    if (!data) continue;
+    if (data.tags && data.tags.length > 0) continue; // tagged server-side since last pull
+
     const tags = await suggestTags(env.AI, t.title, t.notes);
     if (tags.length === 0) continue;
+
     await env.DB.prepare("UPDATE todos SET data = ? WHERE id = ?")
       .bind(JSON.stringify({ ...data, tags }), t.id)
       .run();
