@@ -1,0 +1,29 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "nudge",
+  "main": "worker/index.ts",
+  "compatibility_date": "2025-01-01",
+  // Serve the built PWA as static assets; the Worker handles /api/* + cron.
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "nudge",
+      "database_id": "REPLACE_WITH_D1_DATABASE_ID"
+    }
+  ],
+  // Reminder cron — scans D1 for due reminders.
+  "triggers": { "crons": ["*/5 * * * *"] },
+  "observability": { "enabled": true },
+  // Non-secret, environment-specific vars. Override APP_URL for production.
+  // Secrets (AUTH_SECRET, RESEND_API_KEY) come from .dev.vars / wrangler secret.
+  "vars": {
+    "EMAIL_FROM": "Nudge <onboarding@resend.dev>",
+    "APP_URL": "http://localhost:8787"
+  }
+}

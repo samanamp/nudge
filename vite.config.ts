@@ -35,4 +35,10 @@ export default defineConfig({
       "@": fileURLToPath(new URL("./src", import.meta.url)),
     },
   },
+  // In split dev, proxy API calls to the Worker so cookies stay same-origin.
+  server: {
+    proxy: {
+      "/api": "http://localhost:8787",
+    },
+  },
 });

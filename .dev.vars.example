@@ -1,0 +1,15 @@
+# Local secrets for `wrangler dev`. Copy to `.dev.vars` and fill in.
+# .dev.vars is gitignored — never commit real secrets.
+
+# Long random string used to sign session cookies (e.g. `openssl rand -hex 32`).
+AUTH_SECRET="dev-only-change-me"
+
+# Resend API key (https://resend.com → API Keys). Free tier is fine.
+RESEND_API_KEY="re_xxxxxxxx"
+
+# Sender. With Resend's shared domain you can only email your own verified
+# address; add your own domain to send anywhere.
+EMAIL_FROM="Nudge <onboarding@resend.dev>"
+
+# Base URL the magic-link points back to. Local default below.
+APP_URL="http://localhost:8787"

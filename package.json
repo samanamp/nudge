@@ -5,10 +5,15 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "worker:dev": "wrangler dev",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
+    "typecheck:worker": "tsc -p worker/tsconfig.json",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "db:init": "wrangler d1 execute nudge --local --file=worker/schema.sql",
+    "db:init:remote": "wrangler d1 execute nudge --remote --file=worker/schema.sql",
+    "deploy": "vite build && wrangler deploy"
   },
   "dependencies": {
     "clsx": "^2.1.1",
@@ -23,6 +28,7 @@
     "tailwind-merge": "^2.6.0"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260625.1",
     "@tailwindcss/vite": "^4.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
@@ -31,6 +37,7 @@
     "typescript": "^5.7.2",
     "vite": "^6.0.5",
     "vite-plugin-pwa": "^0.21.1",
-    "vitest": "^2.1.8"
+    "vitest": "^2.1.8",
+    "wrangler": "^4.104.0"
   }
 }

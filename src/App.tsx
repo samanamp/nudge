@@ -5,22 +5,39 @@ import { db, purgeOldCompleted, toggleComplete } from "@/lib/db";
 import type { Todo } from "@/lib/types";
 import { groupTodos } from "@/lib/grouping";
 import { useTheme } from "@/lib/useTheme";
+import { useSession, usePushSync } from "@/lib/session";
+import { useInAppReminders } from "@/lib/notify";
 import { QuickAdd } from "@/components/QuickAdd";
 import { TodoRow } from "@/components/TodoRow";
 import { EditDialog } from "@/components/EditDialog";
 import { CommandPalette } from "@/components/CommandPalette";
+import { AccountMenu } from "@/components/AccountMenu";
 
 export default function App() {
   const [theme, toggleTheme] = useTheme();
   const [editing, setEditing] = useState<Todo | null>(null);
   const [selected, setSelected] = useState(0);
   const quickAddRef = useRef<HTMLInputElement>(null);
+  const session = useSession();
 
   const todos = useLiveQuery(
     () => db.todos.filter((t) => !t.deletedAt).toArray(),
     [],
     [] as Todo[],
   );
+
+  // Server sync (one-way) for reminders, + in-app notifications while open.
+  usePushSync(todos, session.status === "in");
+  useInAppReminders(todos);
+
+  // Clean up the ?auth=… marker after a magic-link round-trip.
+  useEffect(() => {
+    if (location.search.includes("auth=")) {
+      session.refresh();
+      window.history.replaceState({}, "", location.pathname);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const groups = useMemo(() => groupTodos(todos), [todos]);
   const flat = useMemo(() => groups.flatMap((g) => g.todos), [groups]);
@@ -105,6 +122,7 @@ export default function App() {
               <Moon className="size-4" />
             )}
           </button>
+          <AccountMenu session={session} />
         </div>
       </header>
 
