@@ -87,11 +87,13 @@ export async function clearAllTodos(): Promise<void> {
 }
 
 /**
- * Merge server todos into the local store on sign-in (newer-wins per record).
- * Never deletes local-only items — unsynced offline edits survive and get
- * pushed up separately.
+ * Merge server todos into the local store (server wins on pull).
+ * - Upserts server records using newer-wins per item.
+ * - Deletes any local todo absent from the server response — server is truth
+ *   on a pull (push already ran before this is called).
  */
 export async function mergeServerTodos(serverTodos: Todo[]): Promise<void> {
+  const serverIds = new Set(serverTodos.map((t) => t.id).filter(Boolean));
   await db.transaction("rw", db.todos, async () => {
     for (const raw of serverTodos) {
       if (!raw?.id) continue;
@@ -101,11 +103,13 @@ export async function mergeServerTodos(serverTodos: Todo[]): Promise<void> {
         await db.todos.put(s);
       }
     }
+    // Remove local records the server no longer has.
+    await db.todos.filter((t) => !serverIds.has(t.id)).delete();
   });
 }
 
 /** Backfill any missing fields so a partial record can never crash rendering. */
-function normalizeTodo(s: Todo): Todo {
+export function normalizeTodo(s: Todo): Todo {
   return {
     ...s,
     recurrence: s.recurrence ?? noRecurrence(),

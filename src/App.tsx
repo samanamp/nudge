@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
-import { Check, Moon, Sun, Command as CommandIcon } from "lucide-react";
-import { db, purgeOldCompleted, toggleComplete } from "@/lib/db";
+import { Check, Moon, Sun, Command as CommandIcon, RefreshCw } from "lucide-react";
+import { db, normalizeTodo, purgeOldCompleted, toggleComplete } from "@/lib/db";
 import type { Todo } from "@/lib/types";
 import { groupTodos } from "@/lib/grouping";
 import { useTheme } from "@/lib/useTheme";
@@ -22,13 +22,13 @@ export default function App() {
   const session = useSession();
 
   const todos = useLiveQuery(
-    () => db.todos.filter((t) => !t.deletedAt).toArray(),
+    () => db.todos.filter((t) => !t.deletedAt).toArray().then((ts) => ts.map(normalizeTodo)),
     [],
     [] as Todo[],
   );
 
   // Pull todos on sign-in; push changes + in-app notifications while open.
-  usePullOnLogin(session.status, session.email);
+  const { syncing, syncNow } = usePullOnLogin(session.status, session.email);
   usePushSync(todos, session.status === "in");
   useInAppReminders(todos);
 
@@ -123,6 +123,14 @@ export default function App() {
           </div>
         </div>
         <div className="flex items-center gap-1">
+          <button
+            onClick={syncNow}
+            title="Sync now"
+            disabled={syncing}
+            className="rounded-lg p-2 text-[var(--color-text-dim)] transition-colors hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] disabled:opacity-40"
+          >
+            <RefreshCw className={`size-4 ${syncing ? "animate-spin" : ""}`} />
+          </button>
           <button
             onClick={toggleTheme}
             title="Toggle theme"

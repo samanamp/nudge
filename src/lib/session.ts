@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+
+const POLL_INTERVAL_MS = 12_000;
 import type { Todo } from "./types";
 import { api } from "./api";
 import { clearAllTodos, mergeServerTodos } from "./db";
@@ -62,12 +64,36 @@ export function useSession(): Session {
   return { status, email, refresh, logout };
 }
 
-/** On sign-in (and when online), pull the user's todos into the local store. */
-export function usePullOnLogin(status: AuthStatus, email: string | null): void {
-  const pulledFor = useRef<string | null>(null);
+export interface SyncHandle {
+  syncing: boolean;
+  syncNow: () => void;
+}
 
+/**
+ * On sign-in, pull todos from server. Polls every POLL_INTERVAL_MS while
+ * signed in. Returns a handle for a manual sync trigger + loading state.
+ */
+export function usePullOnLogin(
+  status: AuthStatus,
+  email: string | null,
+): SyncHandle {
+  const pulledFor = useRef<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
+
+  const pull = useCallback(async () => {
+    setSyncing(true);
+    try {
+      const todos = await api.getTodos();
+      await mergeServerTodos(todos);
+    } catch {
+      // network failure — leave local state intact
+    } finally {
+      setSyncing(false);
+    }
+  }, []);
+
+  // Initial pull on login; reset guard on logout.
   useEffect(() => {
-    // Reset on logout so the next sign-in always pulls fresh data.
     if (status === "out") {
       pulledFor.current = null;
       return;
@@ -75,13 +101,19 @@ export function usePullOnLogin(status: AuthStatus, email: string | null): void {
     if (status !== "in" || !email || !navigator.onLine) return;
     if (pulledFor.current === email) return;
     pulledFor.current = email;
-    api
-      .getTodos()
-      .then(mergeServerTodos)
-      .catch(() => {
-        pulledFor.current = null; // allow a retry later
-      });
-  }, [status, email]);
+    pull();
+  }, [status, email, pull]);
+
+  // Background poll while signed in.
+  useEffect(() => {
+    if (status !== "in" || !email) return;
+    const id = window.setInterval(() => {
+      if (navigator.onLine) pull();
+    }, POLL_INTERVAL_MS);
+    return () => window.clearInterval(id);
+  }, [status, email, pull]);
+
+  return { syncing, syncNow: pull };
 }
 
 /**

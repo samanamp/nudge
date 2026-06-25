@@ -19,10 +19,10 @@ export function EditDialog({ todo, onClose }: Props) {
   const [notes, setNotes] = useState(todo.notes ?? "");
   const [date, setDate] = useState(todo.dueAt ? toDateInput(todo.dueAt) : "");
   const [time, setTime] = useState(todo.dueAt ? toTimeInput(todo.dueAt) : "");
-  const [freq, setFreq] = useState<RecurrenceFreq>(todo.recurrence.freq);
-  const [interval, setInterval] = useState(todo.recurrence.interval);
+  const [freq, setFreq] = useState<RecurrenceFreq>(todo.recurrence?.freq ?? "none");
+  const [interval, setInterval] = useState(todo.recurrence?.interval ?? 1);
   const [weekdays, setWeekdays] = useState<number[]>(
-    todo.recurrence.weekdays ?? [],
+    todo.recurrence?.weekdays ?? [],
   );
   const [reminders, setReminders] = useState<Reminder[]>(todo.reminders);
   const [confirmDelete, setConfirmDelete] = useState(false);
