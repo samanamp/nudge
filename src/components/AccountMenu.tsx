@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Bell, LogOut, User, X, Check, Calendar } from "lucide-react";
+import { Bell, LogOut, User, X, Check, Calendar, ExternalLink } from "lucide-react";
 import type { Session } from "@/lib/session";
 import { requestAndSubscribePush } from "@/lib/notify";
 
@@ -17,16 +17,22 @@ export function AccountMenu({ session }: { session: Session }) {
     }
   }, []);
 
-  // Close on outside click (desktop dropdown)
+  // Close on outside click, Escape, or viewport resize
   useEffect(() => {
     if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
+    const onMouse = (e: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) setOpen(false);
     };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    const onResize = () => setOpen(false);
+    document.addEventListener("mousedown", onMouse);
+    document.addEventListener("keydown", onKey);
+    window.addEventListener("resize", onResize);
+    return () => {
+      document.removeEventListener("mousedown", onMouse);
+      document.removeEventListener("keydown", onKey);
+      window.removeEventListener("resize", onResize);
+    };
   }, [open]);
 
   return (
@@ -140,7 +146,9 @@ function SignedIn({ session, onClose }: { session: Session; onClose: () => void 
             href="/api/auth/google"
             className="flex w-full items-center gap-2 rounded-lg border border-[var(--color-border)] px-3 py-2.5 text-sm text-[var(--color-text-dim)] hover:border-[var(--color-border-strong)] hover:text-[var(--color-text)]"
           >
-            <Calendar className="size-4" /> Connect Google Calendar
+            <Calendar className="size-4" />
+            Connect Google Calendar
+            <ExternalLink className="ml-auto size-3 opacity-40" />
           </a>
         )
       )}

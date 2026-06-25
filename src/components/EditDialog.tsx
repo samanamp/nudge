@@ -96,9 +96,13 @@ export function EditDialog({ todo, onClose, onDeleted }: Props) {
           "rounded-t-2xl sm:max-w-lg sm:rounded-2xl",
         )}
       >
-        <div className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-3">
-          <span className="font-display text-xs font-semibold uppercase tracking-[0.12em] text-[var(--color-text-dim)]">
-            Edit task
+        <div className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-2.5">
+          <span className="text-[11px] text-[var(--color-text-faint)]">
+            <kbd className="rounded border border-[var(--color-border)] bg-[var(--color-surface-2)] px-1 py-0.5 font-mono text-[10px]">⌘↵</kbd>
+            {" "}save
+            <span className="mx-1.5 opacity-40">·</span>
+            <kbd className="rounded border border-[var(--color-border)] bg-[var(--color-surface-2)] px-1 py-0.5 font-mono text-[10px]">Esc</kbd>
+            {" "}close
           </span>
           <button
             onClick={onClose}

@@ -23,7 +23,7 @@ export function Checkbox({ checked, onToggle, className }: Props) {
         "after:absolute after:inset-[-13px] after:content-['']",
         checked
           ? "border-[var(--color-accent)] bg-[var(--color-accent)] text-[var(--color-accent-fg)]"
-          : "border-[var(--color-border-strong)] hover:border-[var(--color-text-dim)]",
+          : "border-[var(--color-text-faint)] hover:border-[var(--color-text-dim)]",
         className,
       )}
     >

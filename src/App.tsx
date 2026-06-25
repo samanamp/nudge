@@ -125,6 +125,8 @@ export default function App() {
   };
 
   const handleCreated = (id: string) => {
+    // Clear any active tag filter so the new task is immediately visible
+    if (activeTag) setActiveTag(null);
     window.clearTimeout(lastAddedTimer.current);
     setLastAddedId(id);
     lastAddedTimer.current = window.setTimeout(() => setLastAddedId(null), 1500);
@@ -135,6 +137,11 @@ export default function App() {
   };
 
   const open = todos.filter((t) => !t.completedAt).length;
+  // When a tag filter is active, show matching count instead of total
+  const displayCount = activeTag
+    ? filteredTodos.filter((t) => !t.completedAt).length
+    : open;
+  const countLabel = activeTag ? "matching" : "open";
 
   // Sync status pill
   const syncDot = !online
@@ -165,7 +172,7 @@ export default function App() {
               Nudge
             </h1>
             <p className="mt-1 flex flex-wrap items-center gap-1.5 font-mono text-[11px] text-[var(--color-text-faint)]">
-              <span className="tabular-nums">{open}</span> open
+              <span className="tabular-nums">{displayCount}</span> {countLabel}
               {overdueCount > 0 && (
                 <>
                   <span className="text-[var(--color-text-faint)]/50">·</span>
@@ -210,13 +217,18 @@ export default function App() {
       {/* Active tag filter chip */}
       {activeTag && (
         <div className="mt-2 flex items-center gap-2">
-          <span className="text-xs text-[var(--color-text-faint)]">Filtered by</span>
           <button
             onClick={() => setActiveTag(null)}
-            className="flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-medium bg-[var(--color-accent)]/10 text-[var(--color-accent)] hover:bg-[var(--color-accent)]/20 transition-colors"
+            className="flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-medium bg-[var(--color-accent)]/10 text-[var(--color-accent)] hover:bg-[var(--color-accent)]/20 transition-colors"
           >
             {activeTag}
             <X className="size-3" />
+          </button>
+          <button
+            onClick={() => setActiveTag(null)}
+            className="text-[11px] text-[var(--color-text-faint)] hover:text-[var(--color-text-dim)] transition-colors"
+          >
+            clear
           </button>
         </div>
       )}
@@ -242,13 +254,16 @@ export default function App() {
           <div className="space-y-6">
             {groups.map((group) => (
               <section key={group.key}>
-                <h2 className="mb-1.5 flex items-center gap-2 px-3 font-display text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-text-dim)]">
-                  {group.label}
-                  <span className="font-mono text-[10px] font-normal tabular-nums text-[var(--color-text-faint)]">
-                    {group.todos.length}
-                  </span>
-                  <span className="h-px flex-1 bg-[var(--color-border)]" />
-                </h2>
+                {/* Hide section header when there's only one visible group — it's redundant */}
+                {groups.length > 1 && (
+                  <h2 className="mb-1.5 flex items-center gap-2 px-3 font-display text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-text-dim)]">
+                    {group.label}
+                    <span className="font-mono text-[10px] font-normal tabular-nums text-[var(--color-text-faint)]">
+                      {group.todos.length}
+                    </span>
+                    <span className="h-px flex-1 bg-[var(--color-border)]" />
+                  </h2>
+                )}
                 <div>
                   {group.todos.map((todo) => {
                     const index = flat.indexOf(todo);
@@ -267,19 +282,24 @@ export default function App() {
                 </div>
               </section>
             ))}
-
-            {/* Completed toggle */}
-            {completedCount > 0 && (
-              <button
-                onClick={() => setShowCompleted((s) => !s)}
-                className="w-full py-1.5 text-center text-xs text-[var(--color-text-faint)] hover:text-[var(--color-text-dim)] transition-colors"
-              >
-                {showCompleted
-                  ? "Hide completed"
-                  : `Show ${completedCount} completed`}
-              </button>
-            )}
           </div>
+        )}
+
+        {/* Completed toggle — always visible when there are completed items, even in empty-state */}
+        {completedCount > 0 && !activeTag && (
+          <button
+            onClick={() => setShowCompleted((s) => !s)}
+            className="mt-4 w-full py-1.5 text-center text-xs text-[var(--color-text-faint)] hover:text-[var(--color-text-dim)] transition-colors"
+          >
+            {showCompleted ? "Hide completed" : `Show ${completedCount} completed`}
+          </button>
+        )}
+
+        {/* Mobile usage hint — shown below the list on first use */}
+        {flat.length > 0 && (
+          <p className="mt-4 text-center text-[11px] text-[var(--color-text-faint)] sm:hidden">
+            Tap a task to edit · tap ○ to complete
+          </p>
         )}
       </main>
 

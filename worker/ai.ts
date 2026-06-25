@@ -28,11 +28,12 @@ export async function suggestTags(
       max_tokens: 20,
     })) as AiTextResult;
 
+    const VALID = new Set(["errand", "health", "finance", "work", "home", "shopping", "personal", "travel", "family", "fitness"]);
     const text = result.response ?? "";
     return text
       .split(",")
       .map((t) => t.trim().toLowerCase().replace(/[^a-z]/g, ""))
-      .filter((t) => t.length > 1 && t.length < 20)
+      .filter((t) => VALID.has(t))
       .slice(0, 3);
   } catch (e) {
     console.warn("AI tag suggestion failed:", e);
