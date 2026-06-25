@@ -168,37 +168,43 @@ export async function syncCalendar(
     return;
   }
 
+  // Batch-fetch D1's current data for all pushed todos with a due date.
+  // D1 is authoritative for calendarEventId — the push payload may not have it
+  // yet if the client hasn't pulled since the last sync.
+  const ids = pushTodos.filter((t) => t.dueAt).map((t) => t.id);
+  if (ids.length === 0) return;
+  const placeholders = ids.map(() => "?").join(",");
+  const d1Rows = await env.DB.prepare(
+    `SELECT id, data FROM todos WHERE id IN (${placeholders}) AND user_id = ?`,
+  )
+    .bind(...ids, userId)
+    .all<{ id: string; data: string }>();
+
+  const d1Map = new Map(
+    (d1Rows.results ?? []).map((r) => [r.id, JSON.parse(r.data) as CalTodo]),
+  );
+
   for (const todo of pushTodos) {
-    if (!todo.dueAt) continue; // only sync todos with a due date
+    if (!todo.dueAt) continue;
+
+    // Merge: D1's calendarEventId wins over the push payload (avoids duplicates).
+    const d1Data = d1Map.get(todo.id);
+    const merged: CalTodo = { ...todo, calendarEventId: d1Data?.calendarEventId ?? todo.calendarEventId };
 
     try {
-      if (todo.deletedAt || todo.completedAt) {
-        // Remove from calendar.
-        if (todo.calendarEventId) {
-          await deleteEvent(accessToken, todo.calendarEventId);
-          // Clear the stored event ID.
+      if (merged.deletedAt || merged.completedAt) {
+        if (merged.calendarEventId) {
+          await deleteEvent(accessToken, merged.calendarEventId);
           await env.DB.prepare(
             "UPDATE todos SET data = json_remove(data, '$.calendarEventId') WHERE id = ? AND user_id = ?",
-          )
-            .bind(todo.id, userId)
-            .run();
+          ).bind(merged.id, userId).run();
         }
       } else {
-        // Upsert — create or update.
-        const eventId = await upsertEvent(accessToken, todo);
-        if (eventId !== todo.calendarEventId) {
-          // Persist new event ID back to D1.
-          const existing = await env.DB.prepare(
-            "SELECT data FROM todos WHERE id = ? AND user_id = ?",
-          )
-            .bind(todo.id, userId)
-            .first<{ data: string }>();
-          if (existing) {
-            const data = JSON.parse(existing.data) as CalTodo;
-            await env.DB.prepare("UPDATE todos SET data = ? WHERE id = ? AND user_id = ?")
-              .bind(JSON.stringify({ ...data, calendarEventId: eventId }), todo.id, userId)
-              .run();
-          }
+        const eventId = await upsertEvent(accessToken, merged);
+        if (eventId !== merged.calendarEventId && d1Data) {
+          await env.DB.prepare("UPDATE todos SET data = ? WHERE id = ? AND user_id = ?")
+            .bind(JSON.stringify({ ...d1Data, calendarEventId: eventId }), merged.id, userId)
+            .run();
         }
       }
     } catch (e) {
@@ -206,7 +212,7 @@ export async function syncCalendar(
     }
   }
 
-  console.log(`gcal: synced ${pushTodos.filter((t) => t.dueAt).length} todos`);
+  console.log(`gcal: synced ${ids.length} todos`);
 }
 
 // ── Daily agenda block ───────────────────────────────────────────────────────
