@@ -13,7 +13,7 @@ const ORDER: { key: GroupKey; label: string }[] = [
   { key: "overdue", label: "Overdue" },
   { key: "today", label: "Today" },
   { key: "upcoming", label: "Upcoming" },
-  { key: "someday", label: "No date" },
+  { key: "someday", label: "Someday" },
   { key: "done", label: "Completed" },
 ];
 

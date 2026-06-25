@@ -9,16 +9,19 @@ import { Checkbox } from "./Checkbox";
 interface Props {
   todo: Todo;
   selected: boolean;
+  flash?: boolean;
   onSelect: () => void;
   onOpen: () => void;
+  onTagClick?: (tag: string) => void;
 }
 
-export function TodoRow({ todo, selected, onSelect, onOpen }: Props) {
+export function TodoRow({ todo, selected, flash, onSelect, onOpen, onTagClick }: Props) {
   const done = !!todo.completedAt;
   const recurs = (todo.recurrence?.freq ?? "none") !== "none";
   const overdue = todo.dueAt !== undefined && !done && isOverdue(todo.dueAt);
   const hasNag = todo.reminders.some((r) => r.type === "recurring");
   const hasReminder = todo.reminders.length > 0;
+  const tags = todo.tags ?? [];
 
   return (
     <div
@@ -28,9 +31,8 @@ export function TodoRow({ todo, selected, onSelect, onOpen }: Props) {
       onClick={onOpen}
       className={cn(
         "group relative flex items-center gap-3 rounded-[var(--radius-row)] px-3 py-2 transition-colors duration-150",
-        selected
-          ? "bg-[var(--color-surface-2)]"
-          : "hover:bg-[var(--color-surface)]",
+        selected ? "bg-[var(--color-surface-2)]" : "hover:bg-[var(--color-surface)]",
+        flash && "animate-flash",
       )}
     >
       {/* Selection accent bar */}
@@ -52,50 +54,53 @@ export function TodoRow({ todo, selected, onSelect, onOpen }: Props) {
         >
           {todo.title}
         </div>
-        {(todo.notes || (todo.tags && todo.tags.length > 0)) && !done && (
-          <div className="flex items-center gap-1.5 pt-0.5">
+
+        {!done && (
+          <>
             {todo.notes && (
-              <span className="truncate text-xs text-[var(--color-text-faint)]">
+              <p className="truncate text-xs text-[var(--color-text-faint)] pt-0.5">
                 {todo.notes}
-              </span>
+              </p>
             )}
-            {todo.tags?.map((tag) => (
-              <span
-                key={tag}
-                className="shrink-0 rounded px-1.5 py-px font-mono text-[10px] bg-[var(--color-accent)]/10 text-[var(--color-accent)]"
-              >
-                {tag}
-              </span>
-            ))}
-          </div>
+            {tags.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1 pt-0.5">
+                {tags.map((tag) => (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onTagClick?.(tag);
+                    }}
+                    className="rounded px-1.5 py-px text-[10px] font-medium bg-[var(--color-accent)]/10 text-[var(--color-accent)] hover:bg-[var(--color-accent)]/20 transition-colors"
+                  >
+                    {tag}
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
         )}
       </div>
 
       {/* Meta badges */}
       <div className="flex shrink-0 items-center gap-2 text-[var(--color-text-dim)]">
         {recurs && (
-          <span
-            className="flex items-center gap-1 text-[11px]"
-            title={describeRecurrence(todo.recurrence)}
-          >
+          <span className="flex items-center gap-1 text-[11px]" title={describeRecurrence(todo.recurrence)}>
             <Repeat className="size-3" />
           </span>
         )}
         {hasReminder && (
           <span title="Has reminder">
-            {hasNag ? (
-              <AlarmClock className="size-3" />
-            ) : (
-              <Bell className="size-3" />
-            )}
+            {hasNag ? <AlarmClock className="size-3" /> : <Bell className="size-3" />}
           </span>
         )}
         {todo.dueAt !== undefined && (
           <span
             className={cn(
-              "rounded-md px-1.5 py-0.5 font-mono text-[11px] tabular-nums",
+              "rounded-md px-1.5 py-0.5 text-[11px] tabular-nums",
               overdue
-                ? "bg-[var(--color-danger)]/12 text-[var(--color-danger)]"
+                ? "bg-[var(--color-danger)]/12 text-[var(--color-danger)] font-medium"
                 : "text-[var(--color-text-dim)]",
             )}
           >

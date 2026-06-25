@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
-import { Check, Moon, Sun, Command as CommandIcon, RefreshCw } from "lucide-react";
-import { db, normalizeTodo, purgeOldCompleted, toggleComplete } from "@/lib/db";
+import { Check, Moon, Sun, Command as CommandIcon, RefreshCw, X } from "lucide-react";
+import { db, normalizeTodo, purgeOldCompleted, toggleComplete, updateTodo } from "@/lib/db";
 import type { Todo } from "@/lib/types";
 import { groupTodos } from "@/lib/grouping";
 import { useTheme } from "@/lib/useTheme";
-import { useSession, usePushSync, usePullOnLogin } from "@/lib/session";
+import { useSession, usePushSync, usePullOnLogin, useOnlineStatus } from "@/lib/session";
 import { useInAppReminders } from "@/lib/notify";
 import { QuickAdd } from "@/components/QuickAdd";
 import { TodoRow } from "@/components/TodoRow";
@@ -18,8 +18,23 @@ export default function App() {
   const [theme, toggleTheme] = useTheme();
   const [editing, setEditing] = useState<Todo | null>(null);
   const [selected, setSelected] = useState(0);
+  const [showCompleted, setShowCompleted] = useState(false);
+  const [activeTag, setActiveTag] = useState<string | null>(null);
+  const [lastAddedId, setLastAddedId] = useState<string | null>(null);
+  const lastAddedTimer = useRef<number | undefined>(undefined);
   const quickAddRef = useRef<HTMLInputElement>(null);
   const session = useSession();
+  const online = useOnlineStatus();
+
+  // Toast for undo-delete
+  const [toast, setToast] = useState<{ msg: string; undo?: () => void; key: number } | null>(null);
+  const toastTimer = useRef<number | undefined>(undefined);
+  const showToast = useCallback((msg: string, undo?: () => void) => {
+    window.clearTimeout(toastTimer.current);
+    const key = Date.now();
+    setToast({ msg, undo, key });
+    toastTimer.current = window.setTimeout(() => setToast(null), 4500);
+  }, []);
 
   const todos = useLiveQuery(
     () => db.todos.filter((t) => !t.deletedAt).toArray().then((ts) => ts.map(normalizeTodo)),
@@ -27,12 +42,10 @@ export default function App() {
     [] as Todo[],
   );
 
-  // Pull todos on sign-in; push changes + in-app notifications while open.
   const { syncing, syncNow } = usePullOnLogin(session.status, session.email);
-  usePushSync(todos, session.status === "in");
+  const { lastSyncedAt } = usePushSync(todos, session.status === "in");
   useInAppReminders(todos);
 
-  // Clean up the ?auth=… marker after a magic-link round-trip.
   useEffect(() => {
     if (location.search.includes("auth=")) {
       session.refresh();
@@ -41,20 +54,39 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const groups = useMemo(() => groupTodos(todos), [todos]);
-  const flat = useMemo(() => groups.flatMap((g) => g.todos), [groups]);
+  useEffect(() => { purgeOldCompleted(); }, []);
 
-  // Retention sweep once on load.
-  useEffect(() => {
-    purgeOldCompleted();
-  }, []);
+  // Tag filter: filter todos before grouping
+  const filteredTodos = useMemo(
+    () => (activeTag ? todos.filter((t) => t.tags?.includes(activeTag)) : todos),
+    [todos, activeTag],
+  );
 
-  // Keep selection in range as the list changes.
+  const groups = useMemo(() => {
+    const all = groupTodos(filteredTodos);
+    return showCompleted ? all : all.filter((g) => g.key !== "done");
+  }, [filteredTodos, showCompleted]);
+
+  // Keyboard navigation excludes completed tasks
+  const flat = useMemo(
+    () => groups.filter((g) => g.key !== "done").flatMap((g) => g.todos),
+    [groups],
+  );
+
+  const completedCount = useMemo(
+    () => todos.filter((t) => !!t.completedAt).length,
+    [todos],
+  );
+
+  const overdueCount = useMemo(
+    () => groupTodos(todos).find((g) => g.key === "overdue")?.todos.length ?? 0,
+    [todos],
+  );
+
   useEffect(() => {
     setSelected((s) => Math.min(s, Math.max(0, flat.length - 1)));
   }, [flat.length]);
 
-  // Global keyboard navigation (skips when typing or a dialog is open).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const typing =
@@ -88,9 +120,30 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, [flat, selected, editing]);
 
+  const handleTagClick = (tag: string) => {
+    setActiveTag((t) => (t === tag ? null : tag));
+  };
+
+  const handleCreated = (id: string) => {
+    window.clearTimeout(lastAddedTimer.current);
+    setLastAddedId(id);
+    lastAddedTimer.current = window.setTimeout(() => setLastAddedId(null), 1500);
+  };
+
+  const handleDeleted = (id: string) => {
+    showToast("Task deleted", () => updateTodo(id, { deletedAt: undefined }));
+  };
+
   const open = todos.filter((t) => !t.completedAt).length;
 
-  // Auth gate. `loading` avoids a sign-in flash while we revalidate the session.
+  // Sync status pill
+  const syncDot = !online
+    ? "bg-amber-400"
+    : lastSyncedAt
+      ? "bg-emerald-400"
+      : "bg-[var(--color-text-faint)]";
+  const syncLabel = !online ? "offline" : syncing ? "syncing…" : lastSyncedAt ? "synced" : "local";
+
   if (session.status === "loading") {
     return (
       <div className="grid min-h-full place-items-center">
@@ -102,7 +155,6 @@ export default function App() {
 
   return (
     <div className="mx-auto flex min-h-full max-w-2xl flex-col px-4 sm:px-6">
-      {/* Header */}
       <header className="flex items-center justify-between py-6">
         <div className="flex items-center gap-3">
           <div className="brand-mark grid size-9 place-items-center rounded-[11px] text-white">
@@ -112,12 +164,20 @@ export default function App() {
             <h1 className="font-display text-[19px] font-bold leading-none tracking-tight">
               Nudge
             </h1>
-            <p className="mt-1 flex items-center gap-1.5 font-mono text-[11px] text-[var(--color-text-faint)]">
+            <p className="mt-1 flex flex-wrap items-center gap-1.5 font-mono text-[11px] text-[var(--color-text-faint)]">
               <span className="tabular-nums">{open}</span> open
+              {overdueCount > 0 && (
+                <>
+                  <span className="text-[var(--color-text-faint)]/50">·</span>
+                  <span className="font-semibold text-[var(--color-danger)]">
+                    {overdueCount} overdue
+                  </span>
+                </>
+              )}
               <span className="text-[var(--color-text-faint)]/50">·</span>
               <span className="inline-flex items-center gap-1">
-                <span className="size-1.5 rounded-full bg-emerald-400/80" />
-                offline
+                <span className={`size-1.5 rounded-full ${syncDot}`} />
+                {syncLabel}
               </span>
             </p>
           </div>
@@ -136,11 +196,7 @@ export default function App() {
             title="Toggle theme"
             className="rounded-lg p-2 text-[var(--color-text-dim)] transition-colors hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
           >
-            {theme === "dark" ? (
-              <Sun className="size-4" />
-            ) : (
-              <Moon className="size-4" />
-            )}
+            {theme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
           </button>
           <AccountMenu session={session} />
         </div>
@@ -148,13 +204,40 @@ export default function App() {
 
       {/* Desktop quick-add */}
       <div className="hidden sm:block">
-        <QuickAdd ref={quickAddRef} />
+        <QuickAdd ref={quickAddRef} onCreated={handleCreated} />
       </div>
 
-      {/* Lists */}
+      {/* Active tag filter chip */}
+      {activeTag && (
+        <div className="mt-2 flex items-center gap-2">
+          <span className="text-xs text-[var(--color-text-faint)]">Filtered by</span>
+          <button
+            onClick={() => setActiveTag(null)}
+            className="flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-medium bg-[var(--color-accent)]/10 text-[var(--color-accent)] hover:bg-[var(--color-accent)]/20 transition-colors"
+          >
+            {activeTag}
+            <X className="size-3" />
+          </button>
+        </div>
+      )}
+
       <main className="flex-1 py-4">
-        {flat.length === 0 ? (
-          <Empty />
+        {flat.length === 0 && groups.length === 0 ? (
+          activeTag ? (
+            <div className="grid place-items-center py-24 text-center">
+              <p className="text-sm text-[var(--color-text-faint)]">
+                No tasks tagged "{activeTag}".
+              </p>
+              <button
+                onClick={() => setActiveTag(null)}
+                className="mt-2 text-xs text-[var(--color-accent)] hover:opacity-80"
+              >
+                Clear filter
+              </button>
+            </div>
+          ) : (
+            <Empty />
+          )
         ) : (
           <div className="space-y-6">
             {groups.map((group) => (
@@ -174,48 +257,56 @@ export default function App() {
                         key={todo.id}
                         todo={todo}
                         selected={index === selected}
+                        flash={todo.id === lastAddedId}
                         onSelect={() => setSelected(index)}
                         onOpen={() => setEditing(todo)}
+                        onTagClick={handleTagClick}
                       />
                     );
                   })}
                 </div>
               </section>
             ))}
+
+            {/* Completed toggle */}
+            {completedCount > 0 && (
+              <button
+                onClick={() => setShowCompleted((s) => !s)}
+                className="w-full py-1.5 text-center text-xs text-[var(--color-text-faint)] hover:text-[var(--color-text-dim)] transition-colors"
+              >
+                {showCompleted
+                  ? "Hide completed"
+                  : `Show ${completedCount} completed`}
+              </button>
+            )}
           </div>
         )}
       </main>
 
       {/* Mobile quick-add (sticky bottom) */}
       <div className="sticky bottom-0 -mx-4 border-t border-[var(--color-border)] bg-[var(--color-bg)] px-4 py-2 safe-bottom sm:hidden">
-        <QuickAdd ref={quickAddRef} />
+        <QuickAdd ref={quickAddRef} onCreated={handleCreated} />
       </div>
 
-      {/* Footer hint (desktop) */}
+      {/* Footer keyboard hints (desktop) */}
       <footer className="hidden items-center gap-3 py-3 text-[11px] text-[var(--color-text-faint)] sm:flex">
         <span className="flex items-center gap-1">
-          <Kbd>
-            <CommandIcon className="inline size-2.5" />K
-          </Kbd>{" "}
-          command
+          <Kbd><CommandIcon className="inline size-2.5" />K</Kbd> command
         </span>
-        <span>
-          <Kbd>↑↓</Kbd> move
-        </span>
-        <span>
-          <Kbd>⏎</Kbd> open
-        </span>
-        <span>
-          <Kbd>X</Kbd> complete
-        </span>
-        <span>
-          <Kbd>N</Kbd> new
-        </span>
+        <span><Kbd>↑↓</Kbd> move</span>
+        <span><Kbd>⏎</Kbd> open</span>
+        <span><Kbd>X</Kbd> complete</span>
+        <span><Kbd>N</Kbd> new</span>
       </footer>
 
       {editing && (
-        <EditDialog todo={editing} onClose={() => setEditing(null)} />
+        <EditDialog
+          todo={editing}
+          onClose={() => setEditing(null)}
+          onDeleted={handleDeleted}
+        />
       )}
+
       <CommandPalette
         todos={todos}
         theme={theme}
@@ -223,6 +314,31 @@ export default function App() {
         onNew={() => quickAddRef.current?.focus()}
         onOpen={(t) => setEditing(t)}
       />
+
+      {/* Undo toast */}
+      {toast && (
+        <div className="fixed bottom-20 left-1/2 z-[60] flex -translate-x-1/2 items-center gap-3 rounded-xl border border-[var(--color-border-strong)] bg-[var(--color-surface)] px-4 py-2.5 shadow-xl text-sm sm:bottom-6 animate-sheet">
+          <span className="text-[var(--color-text)]">{toast.msg}</span>
+          {toast.undo && (
+            <button
+              onClick={() => {
+                toast.undo?.();
+                window.clearTimeout(toastTimer.current);
+                setToast(null);
+              }}
+              className="font-medium text-[var(--color-accent)] hover:opacity-75 transition-opacity"
+            >
+              Undo
+            </button>
+          )}
+          <button
+            onClick={() => { window.clearTimeout(toastTimer.current); setToast(null); }}
+            className="text-[var(--color-text-faint)] hover:text-[var(--color-text-dim)]"
+          >
+            <X className="size-3.5" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

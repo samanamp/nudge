@@ -65,6 +65,22 @@ export function useSession(): Session {
 export interface SyncHandle {
   syncing: boolean;
   syncNow: () => void;
+  lastSyncedAt: number | null;
+}
+
+export function useOnlineStatus(): boolean {
+  const [online, setOnline] = useState(navigator.onLine);
+  useEffect(() => {
+    const up = () => setOnline(true);
+    const down = () => setOnline(false);
+    window.addEventListener("online", up);
+    window.addEventListener("offline", down);
+    return () => {
+      window.removeEventListener("online", up);
+      window.removeEventListener("offline", down);
+    };
+  }, []);
+  return online;
 }
 
 /**
@@ -114,16 +130,17 @@ export function usePullOnLogin(
     return () => document.removeEventListener("visibilitychange", onVisible);
   }, [status, email, pull]);
 
-  return { syncing, syncNow: pull };
+  return { syncing, syncNow: pull, lastSyncedAt: null };
 }
 
 /**
  * When signed in and online, push todos to the server (debounced) so reminders
  * can be delivered. One-way for v1; full sync is a later milestone.
  */
-export function usePushSync(todos: Todo[], enabled: boolean): void {
+export function usePushSync(todos: Todo[], enabled: boolean): { lastSyncedAt: number | null } {
   const timer = useRef<number | undefined>(undefined);
   const lastSig = useRef("");
+  const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
 
   useEffect(() => {
     if (!enabled || !navigator.onLine) return;
@@ -145,8 +162,7 @@ export function usePushSync(todos: Todo[], enabled: boolean): void {
         .push(todos)
         .then(async (result) => {
           lastSig.current = sig;
-          // Apply AI-generated tags to IndexedDB without bumping updatedAt
-          // so they don't trigger another push.
+          setLastSyncedAt(Date.now());
           const tagMap = result.tags ?? {};
           for (const [id, tags] of Object.entries(tagMap)) {
             await db.todos.update(id, { tags });
@@ -157,4 +173,6 @@ export function usePushSync(todos: Todo[], enabled: boolean): void {
 
     return () => window.clearTimeout(timer.current);
   }, [todos, enabled]);
+
+  return { lastSyncedAt };
 }

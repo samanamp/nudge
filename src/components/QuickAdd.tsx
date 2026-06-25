@@ -6,18 +6,20 @@ import { cn } from "@/lib/cn";
 interface Props {
   className?: string;
   autoFocus?: boolean;
+  onCreated?: (id: string) => void;
 }
 
 /** Title-only fast capture. Deeper fields live in the edit sheet. */
 export const QuickAdd = forwardRef<HTMLInputElement, Props>(
-  ({ className, autoFocus }, ref) => {
+  ({ className, autoFocus, onCreated }, ref) => {
     const [value, setValue] = useState("");
 
     const submit = async () => {
       const title = value.trim();
       if (!title) return;
       setValue("");
-      await createTodo({ title });
+      const id = await createTodo({ title });
+      onCreated?.(id);
     };
 
     return (

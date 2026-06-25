@@ -69,8 +69,8 @@ export function ReminderEditor({ reminders, disabled, onChange, makeId }: Props)
       </div>
 
       {disabled && reminders.length === 0 && (
-        <p className="pl-[4.25rem] text-[11px] text-[var(--color-text-faint)]">
-          Set a date to add reminders.
+        <p className="pl-[4.25rem] text-xs text-[var(--color-text-dim)]">
+          Set a due date above to enable reminders.
         </p>
       )}
 

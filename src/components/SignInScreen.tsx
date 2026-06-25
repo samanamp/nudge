@@ -18,8 +18,8 @@ export function SignInScreen({ onAuthed }: { onAuthed?: () => void }) {
 
         <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-xl">
           <p className="mb-4 text-center text-xs text-[var(--color-text-dim)]">
-            Sign in to access your tasks and reminders. No password — we email you
-            a link.
+            Sign in with your password, or choose "Email a link instead" for a
+            one-click login.
           </p>
           <SignInForm onAuthed={onAuthed} />
         </div>

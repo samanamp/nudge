@@ -105,6 +105,15 @@ body {
   padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
 }
 
+/* Row flash — brief accent pulse when a task is newly added */
+@keyframes flash-in {
+  0% { background-color: color-mix(in oklab, var(--color-accent) 18%, transparent); }
+  100% { background-color: transparent; }
+}
+.animate-flash {
+  animation: flash-in 1.4s ease-out;
+}
+
 /* Entrance animations for overlays/sheets */
 @keyframes overlay-in {
   from {

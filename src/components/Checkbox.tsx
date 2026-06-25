@@ -7,7 +7,6 @@ interface Props {
   className?: string;
 }
 
-/** Minimal round checkbox with a quick check-in animation. */
 export function Checkbox({ checked, onToggle, className }: Props) {
   return (
     <button
@@ -19,7 +18,9 @@ export function Checkbox({ checked, onToggle, className }: Props) {
         onToggle();
       }}
       className={cn(
-        "grid size-[18px] shrink-0 place-items-center rounded-full border transition-colors",
+        // Visual ring kept at 18 px; touch target expanded to 44 px via pseudo-element
+        "relative grid size-[18px] shrink-0 place-items-center rounded-full border transition-colors",
+        "after:absolute after:inset-[-13px] after:content-['']",
         checked
           ? "border-[var(--color-accent)] bg-[var(--color-accent)] text-[var(--color-accent-fg)]"
           : "border-[var(--color-border-strong)] hover:border-[var(--color-text-dim)]",

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Trash2, X } from "lucide-react";
 import { nanoid } from "nanoid";
 import type { RecurrenceFreq, Reminder, Todo } from "@/lib/types";
@@ -7,26 +7,42 @@ import { composeDue, toDateInput, toTimeInput } from "@/lib/dates";
 import { deleteTodo, updateTodo } from "@/lib/db";
 import { ReminderEditor } from "./ReminderEditor";
 
+const AI_TAGS = ["errand", "health", "finance", "work", "home", "shopping", "personal", "travel", "family", "fitness"];
+
 interface Props {
   todo: Todo;
   onClose: () => void;
+  onDeleted?: (id: string) => void;
 }
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-export function EditDialog({ todo, onClose }: Props) {
+export function EditDialog({ todo, onClose, onDeleted }: Props) {
   const [title, setTitle] = useState(todo.title);
   const [notes, setNotes] = useState(todo.notes ?? "");
   const [date, setDate] = useState(todo.dueAt ? toDateInput(todo.dueAt) : "");
   const [time, setTime] = useState(todo.dueAt ? toTimeInput(todo.dueAt) : "");
   const [freq, setFreq] = useState<RecurrenceFreq>(todo.recurrence?.freq ?? "none");
   const [interval, setInterval] = useState(todo.recurrence?.interval ?? 1);
-  const [weekdays, setWeekdays] = useState<number[]>(
-    todo.recurrence?.weekdays ?? [],
-  );
+  const [weekdays, setWeekdays] = useState<number[]>(todo.recurrence?.weekdays ?? []);
   const [reminders, setReminders] = useState<Reminder[]>(todo.reminders);
   const [tags, setTags] = useState((todo.tags ?? []).join(", "));
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [tagsFocused, setTagsFocused] = useState(false);
+  const tagsRef = useRef<HTMLInputElement>(null);
+
+  // Tag autocomplete: suggest AI categories that aren't already added
+  const partialTag = tags.split(",").pop()?.trim().toLowerCase() ?? "";
+  const existingTags = tags.split(",").map((t) => t.trim().toLowerCase()).filter(Boolean);
+  const tagSuggestions = tagsFocused
+    ? AI_TAGS.filter((t) => t.includes(partialTag) && !existingTags.includes(t))
+    : [];
+
+  const appendTag = (tag: string) => {
+    const before = tags.split(",").slice(0, -1).map((t) => t.trim()).filter(Boolean);
+    setTags([...before, tag].join(", ") + (before.length + 1 < 3 ? ", " : ""));
+    tagsRef.current?.focus();
+  };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -62,12 +78,11 @@ export function EditDialog({ todo, onClose }: Props) {
   const remove = async () => {
     await deleteTodo(todo.id);
     onClose();
+    onDeleted?.(todo.id);
   };
 
   const toggleWeekday = (d: number) =>
-    setWeekdays((w) =>
-      w.includes(d) ? w.filter((x) => x !== d) : [...w, d].sort(),
-    );
+    setWeekdays((w) => (w.includes(d) ? w.filter((x) => x !== d) : [...w, d].sort()));
 
   return (
     <div
@@ -99,7 +114,7 @@ export function EditDialog({ todo, onClose }: Props) {
             autoFocus
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Task title"
-            className="w-full bg-transparent text-base font-medium outline-none placeholder:text-[var(--color-text-faint)]"
+            className="w-full border-b border-[var(--color-border)] pb-3 bg-transparent text-base font-medium outline-none placeholder:text-[var(--color-text-faint)] focus:border-[var(--color-accent)] transition-colors"
           />
 
           <textarea
@@ -111,16 +126,34 @@ export function EditDialog({ todo, onClose }: Props) {
           />
 
           <Field label="Tags">
-            <input
-              type="text"
-              value={tags}
-              onChange={(e) => setTags(e.target.value)}
-              placeholder="work, finance, health…"
-              className="control flex-1"
-            />
+            <div className="flex-1 space-y-1.5">
+              <input
+                ref={tagsRef}
+                type="text"
+                value={tags}
+                onChange={(e) => setTags(e.target.value)}
+                onFocus={() => setTagsFocused(true)}
+                onBlur={() => setTimeout(() => setTagsFocused(false), 150)}
+                placeholder="work, health, errand…"
+                className="control w-full"
+              />
+              {tagSuggestions.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {tagSuggestions.map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onMouseDown={(e) => { e.preventDefault(); appendTag(t); }}
+                      className="rounded px-2 py-0.5 text-[11px] font-medium bg-[var(--color-surface-2)] text-[var(--color-text-dim)] hover:bg-[var(--color-accent)]/10 hover:text-[var(--color-accent)] transition-colors"
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </Field>
 
-          {/* Schedule */}
           <Field label="When">
             <input
               type="date"
@@ -137,7 +170,6 @@ export function EditDialog({ todo, onClose }: Props) {
             />
           </Field>
 
-          {/* Recurrence */}
           <Field label="Repeat">
             <select
               value={freq}
@@ -184,7 +216,6 @@ export function EditDialog({ todo, onClose }: Props) {
             </div>
           )}
 
-          {/* Reminders */}
           <ReminderEditor
             reminders={reminders}
             disabled={!date}
@@ -196,9 +227,7 @@ export function EditDialog({ todo, onClose }: Props) {
         <div className="sticky bottom-0 flex items-center justify-between gap-2 border-t border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 safe-bottom">
           {confirmDelete ? (
             <div className="flex items-center gap-2">
-              <span className="text-xs text-[var(--color-text-dim)]">
-                Delete this task?
-              </span>
+              <span className="text-xs text-[var(--color-text-dim)]">Delete this task?</span>
               <button
                 onClick={remove}
                 className="rounded-md bg-[var(--color-danger)] px-2.5 py-1.5 text-xs font-medium text-white"
@@ -240,18 +269,10 @@ export function EditDialog({ todo, onClose }: Props) {
   );
 }
 
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-center gap-3">
-      <span className="w-14 shrink-0 text-xs text-[var(--color-text-dim)]">
-        {label}
-      </span>
+    <div className="flex items-start gap-3">
+      <span className="w-14 shrink-0 pt-1.5 text-xs text-[var(--color-text-dim)]">{label}</span>
       <div className="flex flex-1 flex-wrap items-center gap-2">{children}</div>
     </div>
   );
