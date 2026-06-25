@@ -11,6 +11,11 @@ export default defineConfig({
     VitePWA({
       registerType: "autoUpdate",
       includeAssets: ["favicon.svg"],
+      workbox: {
+        // Never let the SPA fallback swallow API requests (e.g. the magic-link
+        // /api/auth/callback navigation) — they must reach the Worker.
+        navigateFallbackDenylist: [/^\/api\//],
+      },
       manifest: {
         name: "Nudge",
         short_name: "Nudge",
