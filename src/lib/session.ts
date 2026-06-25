@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Todo } from "./types";
 import { api } from "./api";
-import { clearAllTodos, mergeServerTodos } from "./db";
+import { db, clearAllTodos, mergeServerTodos } from "./db";
 
 export type AuthStatus = "loading" | "in" | "out";
 
@@ -143,8 +143,14 @@ export function usePushSync(todos: Todo[], enabled: boolean): void {
     timer.current = window.setTimeout(() => {
       api
         .push(todos)
-        .then(() => {
+        .then(async (result) => {
           lastSig.current = sig;
+          // Apply AI-generated tags to IndexedDB without bumping updatedAt
+          // so they don't trigger another push.
+          const tagMap = result.tags ?? {};
+          for (const [id, tags] of Object.entries(tagMap)) {
+            await db.todos.update(id, { tags });
+          }
         })
         .catch(() => {});
     }, 1500);

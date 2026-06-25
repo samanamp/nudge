@@ -147,13 +147,11 @@ async function route(req: Request, env: Env, url: URL, ctx: ExecutionContext): P
   if (p === "/api/todos/push" && method === "POST") {
     const { todos } = await req.json<{ todos: PushItem[] }>();
     await pushTodos(env, userId, todos ?? []);
-    ctx.waitUntil(
-      Promise.all([
-        backupToGitHub(env).catch((e) => console.error("backup error:", e)),
-        autoTagTodos(env, userId, todos ?? []),
-      ]),
-    );
-    return json({ ok: true, count: todos?.length ?? 0 });
+    // Run AI synchronously so tags come back in this response — no extra sync needed.
+    // 5 s hard timeout; tags for timed-out todos are retried on the next push.
+    const tags = await autoTagSync(env, userId, todos ?? []);
+    ctx.waitUntil(backupToGitHub(env).catch((e) => console.error("backup error:", e)));
+    return json({ ok: true, count: todos?.length ?? 0, tags });
   }
 
   // ── Push notifications ──────────────────────────────────────────────
@@ -205,48 +203,46 @@ async function route(req: Request, env: Env, url: URL, ctx: ExecutionContext): P
   return json({ error: "not found" }, { status: 404 });
 }
 
-/** Auto-tag todos that don't have tags yet using Workers AI.
- *  Cost controls:
- *  - Skip any todo whose push payload already carries tags (client already has them).
- *  - Batch-query D1 once for the rest to catch server-side tags not yet pulled.
- *  - AI is called only for the genuinely untagged remainder.
+/**
+ * Tag untagged todos synchronously during the push so tags arrive in the response.
+ * Runs all AI calls concurrently, abandons after 5 s, and persists to D1.
+ * Returns a map of { todoId → tags[] } for the client to apply immediately.
  */
-async function autoTagTodos(env: Env, userId: string, items: PushItem[]): Promise<void> {
-  if (!env.AI) return;
+async function autoTagSync(
+  env: Env,
+  userId: string,
+  items: PushItem[],
+): Promise<Record<string, string[]>> {
+  if (!env.AI) return {};
 
-  // 1. Candidates: active todos without tags in the push payload.
-  type TaggedItem = PushItem & { todo: StoredTodo & { tags?: string[] } };
-  const candidates = (items as TaggedItem[]).filter(
+  type Tagged = PushItem & { todo: StoredTodo & { tags?: string[] } };
+  const untagged = (items as Tagged[]).filter(
     ({ todo: t }) => t?.id && !t.deletedAt && !t.completedAt && !(t.tags && t.tags.length > 0),
   );
-  if (candidates.length === 0) return;
+  if (untagged.length === 0) return {};
 
-  // 2. Batch-check D1 — one query for all candidates.
-  const ids = candidates.map(({ todo }) => todo.id);
-  const placeholders = ids.map(() => "?").join(",");
-  const rows = await env.DB.prepare(
-    `SELECT id, data FROM todos WHERE id IN (${placeholders}) AND user_id = ?`,
-  )
-    .bind(...ids, userId)
-    .all<{ id: string; data: string }>();
+  console.log(`autoTagSync: ${untagged.length} untagged`);
+  const result: Record<string, string[]> = {};
 
-  const serverData = new Map(
-    (rows.results ?? []).map((r) => [r.id, JSON.parse(r.data) as StoredTodo & { tags?: string[] }]),
+  const tagWork = Promise.all(
+    untagged.map(async ({ todo: t }) => {
+      const tags = await suggestTags(env.AI!, t.title, t.notes);
+      console.log(`autoTagSync: "${t.title}" → [${tags.join(", ")}]`);
+      if (tags.length === 0) return;
+      result[t.id] = tags;
+      await env.DB.prepare("UPDATE todos SET data = ? WHERE id = ? AND user_id = ?")
+        .bind(JSON.stringify({ ...(t as object), tags }), t.id, userId)
+        .run();
+    }),
   );
 
-  // 3. Call AI only for todos that have no tags anywhere.
-  for (const { todo: t } of candidates) {
-    const data = serverData.get(t.id);
-    if (!data) continue;
-    if (data.tags && data.tags.length > 0) continue; // tagged server-side since last pull
+  const timeoutP = new Promise<void>((resolve) =>
+    setTimeout(() => { console.log("autoTagSync: 8 s timeout"); resolve(); }, 8000),
+  );
 
-    const tags = await suggestTags(env.AI, t.title, t.notes);
-    if (tags.length === 0) continue;
-
-    await env.DB.prepare("UPDATE todos SET data = ? WHERE id = ?")
-      .bind(JSON.stringify({ ...data, tags }), t.id)
-      .run();
-  }
+  await Promise.race([tagWork, timeoutP]);
+  console.log(`autoTagSync: done, tagged ${Object.keys(result).length}`);
+  return result;
 }
 
 /** One-way upsert: store each (full) todo and rebuild its reminder schedule. */

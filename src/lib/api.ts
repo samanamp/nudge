@@ -48,7 +48,7 @@ export const api = {
    * loss-less) plus client-computed absolute reminder fire times.
    */
   push: (todos: Todo[]) =>
-    req<{ ok: true; count: number }>("/api/todos/push", {
+    req<{ ok: true; count: number; tags?: Record<string, string[]> }>("/api/todos/push", {
       method: "POST",
       body: JSON.stringify({
         todos: todos.map((t) => ({ todo: t, scheduled: scheduleReminders(t) })),

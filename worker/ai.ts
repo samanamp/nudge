@@ -7,20 +7,25 @@ interface AiTextResult {
   response?: string;
 }
 
-const PROMPT = (title: string, notes?: string) =>
-  `You are a concise task categorizer. Return 1-3 short, lowercase tags for this task.
-Task: "${title}"${notes ? `\nNotes: "${notes}"` : ""}
-Rules: only common categories like work, finance, health, errand, home, shopping, personal, travel, learning, family, fitness. No explanation, no punctuation — just comma-separated tags.`;
-
 export async function suggestTags(
   ai: Ai,
   title: string,
   notes?: string,
 ): Promise<string[]> {
   try {
-    const result = (await ai.run("@cf/zai-org/glm-4.7-flash", {
-      messages: [{ role: "user", content: PROMPT(title, notes) }],
-      max_tokens: 24,
+    const result = (await ai.run("@cf/meta/llama-3.2-1b-instruct", {
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are a task tagger. Reply with ONLY 1-3 comma-separated tags from this list — nothing else: errand, health, finance, work, home, shopping, personal, travel, family, fitness.",
+        },
+        {
+          role: "user",
+          content: `Tag this task: "${title}"${notes ? ` (${notes})` : ""}`,
+        },
+      ],
+      max_tokens: 20,
     })) as AiTextResult;
 
     const text = result.response ?? "";
