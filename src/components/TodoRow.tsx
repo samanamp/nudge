@@ -1,7 +1,7 @@
 import { Repeat, Bell, AlarmClock } from "lucide-react";
 import type { Todo } from "@/lib/types";
 import { cn } from "@/lib/cn";
-import { formatDue, isOverdue } from "@/lib/dates";
+import { formatDue, isOverdue, taskAge } from "@/lib/dates";
 import { describeRecurrence } from "@/lib/recurrence";
 import { toggleComplete } from "@/lib/db";
 import { Checkbox } from "./Checkbox";
@@ -22,6 +22,7 @@ export function TodoRow({ todo, selected, flash, onSelect, onOpen, onTagClick }:
   const hasNag = todo.reminders.some((r) => r.type === "recurring");
   const hasReminder = todo.reminders.length > 0;
   const tags = todo.tags ?? [];
+  const age = !done && todo.dueAt === undefined ? taskAge(todo.createdAt) : null;
 
   return (
     <div
@@ -93,6 +94,19 @@ export function TodoRow({ todo, selected, flash, onSelect, onOpen, onTagClick }:
         {hasReminder && (
           <span title="Has reminder">
             {hasNag ? <AlarmClock className="size-3" /> : <Bell className="size-3" />}
+          </span>
+        )}
+        {age && (
+          <span
+            title={`Added ${age.label} ago — no due date set`}
+            className={cn(
+              "tabular-nums text-[11px]",
+              age.tier === "faint" && "text-[var(--color-text-faint)]",
+              age.tier === "warn" && "text-amber-400/80",
+              age.tier === "urgent" && "font-medium text-orange-400",
+            )}
+          >
+            {age.label}
           </span>
         )}
         {todo.dueAt !== undefined && (

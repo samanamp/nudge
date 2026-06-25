@@ -26,6 +26,20 @@ export function formatDue(dueAt: number): string {
     : `${format(d, "MMM d, yyyy")}${time}`;
 }
 
+/**
+ * Age label for undated tasks. Returns null for tasks < 3 days old (too new to matter).
+ * Returns a label + urgency tier so the caller can colour it appropriately.
+ */
+export function taskAge(createdAt: number): { label: string; tier: "faint" | "warn" | "urgent" } | null {
+  const days = differenceInCalendarDays(startOfDay(new Date()), startOfDay(new Date(createdAt)));
+  if (days < 3) return null;
+  if (days < 7) return { label: `${days}d`, tier: "faint" };
+  if (days < 14) return { label: "1wk", tier: "faint" };
+  if (days < 30) return { label: `${Math.floor(days / 7)}wk`, tier: "warn" };
+  if (days < 90) return { label: `${Math.floor(days / 30)}mo`, tier: "urgent" };
+  return { label: `${Math.floor(days / 30)}mo`, tier: "urgent" };
+}
+
 export function isOverdue(dueAt: number): boolean {
   return dueAt < Date.now();
 }
