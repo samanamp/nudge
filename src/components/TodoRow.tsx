@@ -52,9 +52,21 @@ export function TodoRow({ todo, selected, onSelect, onOpen }: Props) {
         >
           {todo.title}
         </div>
-        {todo.notes && !done && (
-          <div className="truncate text-xs text-[var(--color-text-faint)]">
-            {todo.notes}
+        {(todo.notes || (todo.tags && todo.tags.length > 0)) && !done && (
+          <div className="flex items-center gap-1.5 pt-0.5">
+            {todo.notes && (
+              <span className="truncate text-xs text-[var(--color-text-faint)]">
+                {todo.notes}
+              </span>
+            )}
+            {todo.tags?.map((tag) => (
+              <span
+                key={tag}
+                className="shrink-0 rounded px-1.5 py-px font-mono text-[10px] bg-[var(--color-accent)]/10 text-[var(--color-accent)]"
+              >
+                {tag}
+              </span>
+            ))}
           </div>
         )}
       </div>

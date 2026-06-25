@@ -19,6 +19,7 @@
   ],
   // Reminder cron — scans D1 for due reminders.
   "triggers": { "crons": ["*/5 * * * *"] },
+  "ai": { "binding": "AI" },
   "observability": { "enabled": true },
   // Non-secret, environment-specific vars. Override APP_URL for production.
   // Secrets (AUTH_SECRET, RESEND_API_KEY) come from .dev.vars / wrangler secret.

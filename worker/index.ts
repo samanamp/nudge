@@ -12,6 +12,7 @@ import {
 } from "./auth";
 import { runDueReminders } from "./reminders";
 import { backupToGitHub } from "./backup";
+import { suggestTags } from "./ai";
 
 export interface Env {
   DB: D1Database;
@@ -21,6 +22,9 @@ export interface Env {
   EMAIL_FROM: string;
   APP_URL: string;
   GITHUB_BACKUP_PAT?: string;
+  VAPID_PUBLIC_KEY?: string;
+  VAPID_PRIVATE_KEY?: string;
+  AI?: Ai;
 }
 
 /** Reminder as pushed by the client, with a client-computed absolute fire time. */
@@ -143,9 +147,49 @@ async function route(req: Request, env: Env, url: URL, ctx: ExecutionContext): P
   if (p === "/api/todos/push" && method === "POST") {
     const { todos } = await req.json<{ todos: PushItem[] }>();
     await pushTodos(env, userId, todos ?? []);
-    // Run backup after response is sent — keeps the Worker alive via waitUntil.
-    ctx.waitUntil(backupToGitHub(env).catch((e) => console.error("backup error:", e)));
+    ctx.waitUntil(
+      Promise.all([
+        backupToGitHub(env).catch((e) => console.error("backup error:", e)),
+        autoTagTodos(env, userId, todos ?? []),
+      ]),
+    );
     return json({ ok: true, count: todos?.length ?? 0 });
+  }
+
+  // ── Push notifications ──────────────────────────────────────────────
+  if (p === "/api/push/key" && method === "GET") {
+    return json({ key: env.VAPID_PUBLIC_KEY ?? "" });
+  }
+
+  if (p === "/api/push/subscribe" && method === "POST") {
+    const { endpoint, p256dh, auth } = await req.json<{
+      endpoint: string;
+      p256dh: string;
+      auth: string;
+    }>();
+    if (!endpoint || !p256dh || !auth)
+      return json({ error: "missing fields" }, { status: 400 });
+    const { nanoid } = await import("nanoid");
+    await env.DB.prepare(
+      `INSERT INTO push_subscriptions (id, user_id, endpoint, p256dh, auth, created_at)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(user_id, endpoint) DO UPDATE SET p256dh = excluded.p256dh, auth = excluded.auth`,
+    )
+      .bind(nanoid(), userId, endpoint, p256dh, auth, Date.now())
+      .run();
+    return json({ ok: true });
+  }
+
+  if (p === "/api/push/unsubscribe" && method === "POST") {
+    const { endpoint } = await req.json<{ endpoint: string }>();
+    if (endpoint) {
+      await env.DB.prepare(
+        "DELETE FROM push_subscriptions WHERE user_id = ? AND endpoint = ?",
+      )
+        .bind(userId, endpoint)
+        .run();
+    }
+    return json({ ok: true });
   }
 
   if (p === "/api/todos" && method === "GET") {
@@ -159,6 +203,27 @@ async function route(req: Request, env: Env, url: URL, ctx: ExecutionContext): P
   }
 
   return json({ error: "not found" }, { status: 404 });
+}
+
+/** Auto-tag todos that don't have tags yet using Workers AI. */
+async function autoTagTodos(env: Env, userId: string, items: PushItem[]): Promise<void> {
+  if (!env.AI) return;
+  for (const { todo: t } of items) {
+    if (!t?.id || t.deletedAt || t.completedAt) continue;
+    const row = await env.DB.prepare(
+      "SELECT data FROM todos WHERE id = ? AND user_id = ?",
+    )
+      .bind(t.id, userId)
+      .first<{ data: string }>();
+    if (!row) continue;
+    const data = JSON.parse(row.data) as StoredTodo & { tags?: string[] };
+    if (data.tags && data.tags.length > 0) continue; // already tagged
+    const tags = await suggestTags(env.AI, t.title, t.notes);
+    if (tags.length === 0) continue;
+    await env.DB.prepare("UPDATE todos SET data = ? WHERE id = ?")
+      .bind(JSON.stringify({ ...data, tags }), t.id)
+      .run();
+  }
 }
 
 /** One-way upsert: store each (full) todo and rebuild its reminder schedule. */

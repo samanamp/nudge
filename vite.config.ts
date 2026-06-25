@@ -9,12 +9,14 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
+      strategies: "injectManifest",
+      srcDir: "src",
+      filename: "sw.ts",
       registerType: "autoUpdate",
       includeAssets: ["favicon.svg"],
-      workbox: {
-        // Never let the SPA fallback swallow API requests (e.g. the magic-link
-        // /api/auth/callback navigation) — they must reach the Worker.
-        navigateFallbackDenylist: [/^\/api\//],
+      injectManifest: {
+        // Keep the generated SW small — only precache the shell assets.
+        globPatterns: ["**/*.{js,css,html,svg,ico,woff2}"],
       },
       manifest: {
         name: "Nudge",

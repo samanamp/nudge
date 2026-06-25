@@ -1,10 +1,13 @@
 import type { Env } from "./index";
 import { reminderEmail, sendEmail } from "./email";
+import { sendWebPush } from "./webpush";
 
 const DAY_MS = 86_400_000;
 
 interface DueRow {
   id: string;
+  todo_id: string;
+  user_id: string;
   type: string;
   channels: string;
   title: string;
@@ -25,8 +28,8 @@ interface DueRow {
  */
 export async function runDueReminders(env: Env, now = Date.now()): Promise<number> {
   const due = await env.DB.prepare(
-    `SELECT r.id, r.type, r.channels, r.title, r.notes, r.due_at,
-            r.cadence_days, r.stop, r.next_fire_at,
+    `SELECT r.id, r.todo_id, r.user_id, r.type, r.channels, r.title, r.notes,
+            r.due_at, r.cadence_days, r.stop, r.next_fire_at,
             t.completed_at, t.deleted_at, u.email
        FROM reminders r
        JOIN todos t ON t.id = r.todo_id
@@ -46,12 +49,35 @@ export async function runDueReminders(env: Env, now = Date.now()): Promise<numbe
     }
 
     const channels: string[] = safeParse(r.channels);
+
     if (channels.includes("email")) {
       const ok = await sendEmail(env, {
         to: r.email,
         ...reminderEmail(r.title, r.notes ?? undefined, r.due_at ?? undefined),
       });
       if (ok) fired++;
+    }
+
+    if (channels.includes("push") && env.VAPID_PRIVATE_KEY && env.VAPID_PUBLIC_KEY) {
+      const subs = await env.DB.prepare(
+        "SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ?",
+      )
+        .bind(r.user_id)
+        .all<{ endpoint: string; p256dh: string; auth: string }>();
+
+      const dueStr = r.due_at ? new Date(r.due_at).toLocaleDateString() : undefined;
+      const body = dueStr ? `Due ${dueStr}` : (r.notes ?? "Reminder");
+
+      await Promise.all(
+        (subs.results ?? []).map((sub) =>
+          sendWebPush(
+            sub,
+            { title: r.title, body, tag: r.id },
+            env.VAPID_PRIVATE_KEY!,
+            env.VAPID_PUBLIC_KEY!,
+          ),
+        ),
+      );
     }
 
     const next = advance(r, now);

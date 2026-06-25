@@ -55,6 +55,8 @@ export interface Todo {
   updatedAt: number;
   /** Soft-delete tombstone (epoch ms) for future sync. */
   deletedAt?: number;
+  /** AI-suggested + user-editable tags (e.g. "work", "finance"). */
+  tags?: string[];
 }
 
 export const noRecurrence = (): RecurrenceRule => ({

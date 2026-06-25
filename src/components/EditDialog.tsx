@@ -25,6 +25,7 @@ export function EditDialog({ todo, onClose }: Props) {
     todo.recurrence?.weekdays ?? [],
   );
   const [reminders, setReminders] = useState<Reminder[]>(todo.reminders);
+  const [tags, setTags] = useState((todo.tags ?? []).join(", "));
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
@@ -39,6 +40,10 @@ export function EditDialog({ todo, onClose }: Props) {
 
   const save = async () => {
     if (!title.trim()) return;
+    const parsedTags = tags
+      .split(",")
+      .map((t) => t.trim().toLowerCase())
+      .filter((t) => t.length > 0);
     await updateTodo(todo.id, {
       title: title.trim(),
       notes: notes.trim() || undefined,
@@ -49,6 +54,7 @@ export function EditDialog({ todo, onClose }: Props) {
         weekdays: freq === "weekly" ? weekdays : undefined,
       },
       reminders,
+      tags: parsedTags,
     });
     onClose();
   };
@@ -103,6 +109,16 @@ export function EditDialog({ todo, onClose }: Props) {
             rows={2}
             className="w-full resize-none rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-[13px] outline-none focus:border-[var(--color-border-strong)] placeholder:text-[var(--color-text-faint)]"
           />
+
+          <Field label="Tags">
+            <input
+              type="text"
+              value={tags}
+              onChange={(e) => setTags(e.target.value)}
+              placeholder="work, finance, health…"
+              className="control flex-1"
+            />
+          </Field>
 
           {/* Schedule */}
           <Field label="When">

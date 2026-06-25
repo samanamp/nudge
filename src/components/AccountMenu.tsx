@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Bell, LogOut, User, X, Check } from "lucide-react";
 import type { Session } from "@/lib/session";
-import { requestNotifyPermission } from "@/lib/notify";
+import { requestAndSubscribePush } from "@/lib/notify";
 
 /** Signed-in account sheet: identity, notifications, sign out. */
 export function AccountMenu({ session }: { session: Session }) {
@@ -64,7 +64,7 @@ function SignedIn({ session }: { session: Session }) {
       </div>
 
       <button
-        onClick={async () => setPerm(await requestNotifyPermission())}
+        onClick={async () => setPerm(await requestAndSubscribePush())}
         disabled={perm === "granted"}
         className="flex w-full items-center gap-2 rounded-lg border border-[var(--color-border)] px-3 py-2.5 text-sm text-[var(--color-text-dim)] hover:border-[var(--color-border-strong)] hover:text-[var(--color-text)] disabled:opacity-60"
       >
