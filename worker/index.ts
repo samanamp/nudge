@@ -11,6 +11,7 @@ import {
   verifyPassword,
 } from "./auth";
 import { runDueReminders } from "./reminders";
+import { backupToGitHub } from "./backup";
 
 export interface Env {
   DB: D1Database;
@@ -19,6 +20,7 @@ export interface Env {
   RESEND_API_KEY: string;
   EMAIL_FROM: string;
   APP_URL: string;
+  GITHUB_BACKUP_PAT?: string;
 }
 
 /** Reminder as pushed by the client, with a client-computed absolute fire time. */
@@ -52,12 +54,12 @@ const json = (data: unknown, init?: ResponseInit) =>
   });
 
 export default {
-  async fetch(req: Request, env: Env): Promise<Response> {
+  async fetch(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(req.url);
     if (!url.pathname.startsWith("/api/")) return env.ASSETS.fetch(req);
 
     try {
-      return await route(req, env, url);
+      return await route(req, env, url, ctx);
     } catch (err) {
       console.error("api error", err);
       return json({ error: "internal" }, { status: 500 });
@@ -70,7 +72,7 @@ export default {
   },
 };
 
-async function route(req: Request, env: Env, url: URL): Promise<Response> {
+async function route(req: Request, env: Env, url: URL, ctx: ExecutionContext): Promise<Response> {
   const p = url.pathname;
   const method = req.method;
 
@@ -141,6 +143,8 @@ async function route(req: Request, env: Env, url: URL): Promise<Response> {
   if (p === "/api/todos/push" && method === "POST") {
     const { todos } = await req.json<{ todos: PushItem[] }>();
     await pushTodos(env, userId, todos ?? []);
+    // Run backup after response is sent — keeps the Worker alive via waitUntil.
+    ctx.waitUntil(backupToGitHub(env).catch((e) => console.error("backup error:", e)));
     return json({ ok: true, count: todos?.length ?? 0 });
   }
 
