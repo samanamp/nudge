@@ -208,3 +208,200 @@ export async function syncCalendar(
 
   console.log(`gcal: synced ${pushTodos.filter((t) => t.dueAt).length} todos`);
 }
+
+// ── Daily agenda block ───────────────────────────────────────────────────────
+
+/** "YYYY-MM-DD" for the given timezone, e.g. "2026-06-25". */
+function todayInTz(tz: string): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
+
+function formatTime(ms: number, tz: string): string {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  }).format(new Date(ms));
+}
+
+function formatDate(ms: number, tz: string): string {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  }).format(new Date(ms));
+}
+
+function buildAgendaDescription(todos: CalTodo[], tz: string, today: string): string {
+  const todayStart = new Date(`${today}T00:00:00`).getTime();
+
+  // We compare dates in the user's timezone using date strings.
+  function dateStrOf(ms: number) {
+    return new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(ms));
+  }
+
+  const nowPlus7 = todayStart + 8 * 24 * 60 * 60 * 1000;
+
+  const dueToday: CalTodo[] = [];
+  const dueWeek: CalTodo[] = [];
+  const undated: CalTodo[] = [];
+
+  for (const t of todos) {
+    if (t.completedAt || t.deletedAt) continue;
+    if (!t.dueAt) {
+      undated.push(t);
+    } else if (dateStrOf(t.dueAt) === today) {
+      dueToday.push(t);
+    } else if (t.dueAt < nowPlus7) {
+      dueWeek.push(t);
+    }
+  }
+
+  dueToday.sort((a, b) => (a.dueAt ?? 0) - (b.dueAt ?? 0));
+  dueWeek.sort((a, b) => (a.dueAt ?? 0) - (b.dueAt ?? 0));
+
+  const lines: string[] = [];
+
+  if (dueToday.length) {
+    lines.push("DUE TODAY");
+    for (const t of dueToday) {
+      const hasTime = new Date(t.dueAt!).getUTCHours() !== 0 || new Date(t.dueAt!).getUTCMinutes() !== 0;
+      lines.push(`• ${t.title}${hasTime ? `  ${formatTime(t.dueAt!, tz)}` : ""}`);
+    }
+  }
+
+  if (dueWeek.length) {
+    if (lines.length) lines.push("");
+    lines.push("THIS WEEK");
+    for (const t of dueWeek) {
+      lines.push(`• ${t.title}  ${formatDate(t.dueAt!, tz)}`);
+    }
+  }
+
+  if (undated.length) {
+    if (lines.length) lines.push("");
+    lines.push("ANYTIME");
+    for (const t of undated) {
+      lines.push(`• ${t.title}`);
+    }
+  }
+
+  return lines.join("\n");
+}
+
+/**
+ * Create or update today's 6:00–6:15 AM agenda event for a user.
+ * Idempotent: updates the stored event if already created for today,
+ * creates a fresh one if the date rolled over.
+ */
+export async function updateDailyAgenda(env: Env, userId: string): Promise<void> {
+  if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) return;
+
+  const user = await env.DB.prepare(
+    `SELECT google_refresh_token, timezone,
+            google_agenda_event_id, google_agenda_date
+     FROM users WHERE id = ?`,
+  )
+    .bind(userId)
+    .first<{
+      google_refresh_token: string | null;
+      timezone: string | null;
+      google_agenda_event_id: string | null;
+      google_agenda_date: string | null;
+    }>();
+  if (!user?.google_refresh_token) return;
+
+  const tz = user.timezone ?? "UTC";
+  const today = todayInTz(tz);
+
+  let accessToken: string;
+  try {
+    accessToken = await refreshAccessToken(env, user.google_refresh_token);
+  } catch (e) {
+    console.warn("gcal agenda: token refresh failed:", e);
+    return;
+  }
+
+  // Fetch all active todos for this user.
+  const rows = await env.DB.prepare(
+    "SELECT data FROM todos WHERE user_id = ? AND deleted_at IS NULL",
+  )
+    .bind(userId)
+    .all<{ data: string }>();
+  const todos = (rows.results ?? []).map((r) => JSON.parse(r.data) as CalTodo);
+
+  const dueToday = todos.filter(
+    (t) => !t.completedAt && !t.deletedAt &&
+      t.dueAt &&
+      new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" })
+        .format(new Date(t.dueAt)) === today,
+  );
+  const title = `Nudge · ${dueToday.length} task${dueToday.length !== 1 ? "s" : ""} today`;
+  const description = buildAgendaDescription(todos, tz, today);
+
+  const eventBody = JSON.stringify({
+    summary: title,
+    description,
+    start: { dateTime: `${today}T06:00:00`, timeZone: tz },
+    end: { dateTime: `${today}T06:15:00`, timeZone: tz },
+  });
+
+  const headers = {
+    Authorization: `Bearer ${accessToken}`,
+    "Content-Type": "application/json",
+  };
+
+  let eventId = user.google_agenda_event_id;
+
+  if (eventId && user.google_agenda_date === today) {
+    // Update in place.
+    const res = await fetch(`${CAL_BASE}/${encodeURIComponent(eventId)}`, {
+      method: "PUT",
+      headers,
+      body: eventBody,
+    });
+    if (res.status === 404) eventId = null; // deleted externally — fall through to create
+    else if (!res.ok) { console.warn("gcal agenda: update failed", res.status); return; }
+  }
+
+  if (!eventId || user.google_agenda_date !== today) {
+    // Create a new event for today.
+    const res = await fetch(CAL_BASE, { method: "POST", headers, body: eventBody });
+    if (!res.ok) { console.warn("gcal agenda: create failed", res.status, await res.text()); return; }
+    eventId = ((await res.json()) as { id: string }).id;
+  }
+
+  if (eventId !== user.google_agenda_event_id || today !== user.google_agenda_date) {
+    await env.DB.prepare(
+      "UPDATE users SET google_agenda_event_id = ?, google_agenda_date = ? WHERE id = ?",
+    )
+      .bind(eventId, today, userId)
+      .run();
+  }
+
+  console.log(`gcal agenda: updated "${title}" for ${today} (${tz})`);
+}
+
+/**
+ * Update agendas for all calendar-connected users — called from the cron job
+ * so the agenda rolls over at midnight even without a push.
+ */
+export async function updateAllAgendas(env: Env): Promise<void> {
+  if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) return;
+  const rows = await env.DB.prepare(
+    "SELECT id FROM users WHERE google_refresh_token IS NOT NULL",
+  ).all<{ id: string }>();
+  await Promise.all(
+    (rows.results ?? []).map((r) =>
+      updateDailyAgenda(env, r.id).catch((e) => console.warn("agenda error:", r.id, e)),
+    ),
+  );
+}

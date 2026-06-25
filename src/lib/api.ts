@@ -52,6 +52,7 @@ export const api = {
       method: "POST",
       body: JSON.stringify({
         todos: todos.map((t) => ({ todo: t, scheduled: scheduleReminders(t) })),
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       }),
     }),
 };

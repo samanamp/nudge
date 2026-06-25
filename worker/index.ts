@@ -13,7 +13,7 @@ import {
 import { runDueReminders } from "./reminders";
 import { backupToGitHub } from "./backup";
 import { suggestTags } from "./ai";
-import { exchangeCode, googleAuthUrl, syncCalendar } from "./gcal";
+import { exchangeCode, googleAuthUrl, syncCalendar, updateDailyAgenda, updateAllAgendas } from "./gcal";
 
 export interface Env {
   DB: D1Database;
@@ -76,6 +76,7 @@ export default {
   async scheduled(_event: ScheduledController, env: Env): Promise<void> {
     const fired = await runDueReminders(env);
     if (fired) console.log(`reminders fired: ${fired}`);
+    await updateAllAgendas(env).catch((e) => console.error("agenda cron error:", e));
   },
 };
 
@@ -148,15 +149,21 @@ async function route(req: Request, env: Env, url: URL, ctx: ExecutionContext): P
   if (!userId) return json({ error: "unauthorized" }, { status: 401 });
 
   if (p === "/api/todos/push" && method === "POST") {
-    const { todos } = await req.json<{ todos: PushItem[] }>();
+    const { todos, timezone } = await req.json<{ todos: PushItem[]; timezone?: string }>();
+    // Persist timezone for Calendar agenda scheduling.
+    if (timezone) {
+      await env.DB.prepare("UPDATE users SET timezone = ? WHERE id = ?").bind(timezone, userId).run();
+    }
     await pushTodos(env, userId, todos ?? []);
     // AI tagging: synchronous so tags arrive in this response.
     const tags = await autoTagSync(env, userId, todos ?? []);
-    // Calendar + backup in background (non-blocking).
+    // Calendar + agenda + backup in background (non-blocking).
+    type CT = Parameters<typeof syncCalendar>[2][number];
     ctx.waitUntil(
       Promise.all([
         backupToGitHub(env).catch((e) => console.error("backup error:", e)),
-        syncCalendar(env, userId, (todos ?? []).map((i) => i.todo as unknown as Parameters<typeof syncCalendar>[2][number])).catch((e) => console.error("gcal error:", e)),
+        syncCalendar(env, userId, (todos ?? []).map((i) => i.todo as unknown as CT)).catch((e) => console.error("gcal error:", e)),
+        updateDailyAgenda(env, userId).catch((e) => console.error("agenda error:", e)),
       ]),
     );
     return json({ ok: true, count: todos?.length ?? 0, tags });
