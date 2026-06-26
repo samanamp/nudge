@@ -153,13 +153,17 @@ export async function sendWebPush(
   vapidPublicKeyB64: string,
 ): Promise<boolean> {
   try {
-    const privateKeyJWK = JSON.parse(vapidPrivateKeyJSON) as JsonWebKey;
+    // Strip surrounding quotes that wrangler secret put stores verbatim when
+    // the value was entered with quotes (e.g. "key" or '{"jwk"}')
+    const cleanPriv = vapidPrivateKeyJSON.replace(/^["']|["']$/g, "").trim();
+    const cleanPub = vapidPublicKeyB64.replace(/^["']|["']$/g, "").trim();
+    const privateKeyJWK = JSON.parse(cleanPriv) as JsonWebKey;
     const { endpoint, p256dh, auth } = subscription;
 
     // Audience = push service origin
     const audience = new URL(endpoint).origin;
     const jwt = await vapidJWT(privateKeyJWK, audience, "mailto:nudge@updates.edge.bond");
-    const authorization = `vapid t=${jwt},k=${vapidPublicKeyB64}`;
+    const authorization = `vapid t=${jwt},k=${cleanPub}`;
 
     const { body } = await encryptPayload(p256dh, auth, JSON.stringify(payload));
 

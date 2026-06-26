@@ -229,7 +229,9 @@ async function route(req: Request, env: Env, url: URL, ctx: ExecutionContext): P
 
   // ── Push notifications ──────────────────────────────────────────────
   if (p === "/api/push/key" && method === "GET") {
-    return json({ key: env.VAPID_PUBLIC_KEY ?? "" });
+    // Strip surrounding quotes that wrangler secret put sometimes stores verbatim
+    const key = (env.VAPID_PUBLIC_KEY ?? "").replace(/^["']|["']$/g, "").trim();
+    return json({ key });
   }
 
   if (p === "/api/push/subscribe" && method === "POST") {
