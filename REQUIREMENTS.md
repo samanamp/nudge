@@ -1,6 +1,6 @@
 # Nudge — Requirements
 
-_Last updated: 2026-06-25_
+_Last updated: 2026-06-25 · Live at https://nudge.edge.bond_
 
 A local-first, offline-capable todo app for the browser, working cleanly on
 mobile and desktop, with time-sensitive todos, flexible recurrence, and
@@ -37,8 +37,8 @@ reminders delivered even when the app is closed.
 | Reminder channels | Email + Web Push (free, reliable). SMS deferred.              |
 | Offline model   | Local-first; works offline, auto-syncs when back online.        |
 | Sync            | Multi-device auto-sync via a backend.                           |
-| Sign-in         | Email magic link (passwordless).                                |
-| Infra           | Cloudflare — Workers + D1 + Pages.                              |
+| Sign-in         | Email magic link or password.                                   |
+| Infra           | Cloudflare — Worker (serves SPA + API) + D1.                    |
 | Install         | Responsive website first; installable PWA. Widget later.        |
 
 ## 4. Functional requirements
@@ -101,7 +101,7 @@ reminders delivered even when the app is closed.
 - Request notification permission with clear UX; degrade gracefully if denied
   (fall back to email-only reminders).
 
-### 4.7 Google Calendar sync (later stage)
+### 4.7 Google Calendar sync ✅ shipped
 - Connect a Google account (OAuth) and sync todos one-way into a dedicated
   "Todos" calendar (kept separate from the user's real events; easy to toggle).
 - **Daily agenda block**: every todo due _that day_ appears as a single short
@@ -123,7 +123,7 @@ reminders delivered even when the app is closed.
   possible future extension.
 - Timezone-aware; the 6am block uses the user's local timezone.
 
-### 4.8 AI enhancements (later stage)
+### 4.8 AI enhancements ✅ auto-tagging shipped
 Uses Cloudflare **Workers AI** free/included quota (runs in the existing Worker;
 no extra infra). All AI features are **optional, async, and non-blocking** — the
 app works fully without them, and AI never gates creating/saving a todo.
@@ -148,7 +148,7 @@ app works fully without them, and AI never gates creating/saving a todo.
   silently on quota/error; respect privacy (only send task text, opt-out
   available); keep within Workers AI free allowance.
 
-### 4.9 Durable git backup & recovery (later stage)
+### 4.9 Durable git backup & recovery ✅ shipped
 The primary state store (D1 / a device) could be lost. To guarantee tasks are
 never lost, the system continuously mirrors a full snapshot into a **separate
 private GitHub repo** (`nudge-backup`). Git history then doubles as versioned,
@@ -185,31 +185,32 @@ point-in-time disaster recovery.
 - **Privacy**: personal data; minimal collection (email + todos only).
 - **Responsive**: usable one-handed on a phone and comfortable on desktop.
 
-## 6. Architecture (proposed)
+## 6. Architecture (as built)
 
 ```
 ┌─────────────────────────────────────────────┐
-│  Browser (PWA)                               │
-│  • UI (responsive, mobile + desktop)         │
-│  • IndexedDB  ← source of truth offline      │
+│  Browser (PWA)  nudge.edge.bond              │
+│  • React + IndexedDB (Dexie) — offline SoT  │
 │  • Service worker: offline cache + push recv │
-│  • Sync engine: change queue → backend       │
+│  • Sync: debounced push + pull on login      │
 └───────────────┬─────────────────────────────┘
-                │ HTTPS (when online)
+                │ HTTPS (same-origin — Worker serves both)
 ┌───────────────▼─────────────────────────────┐
-│  Cloudflare                                  │
-│  • Pages: hosts the static PWA               │
-│  • Worker: sync API + auth (magic link)      │
-│  • D1: server copy of todos + reminders      │
-│  • Cron Trigger: scans due reminders,        │
-│    sends email + web push                    │
-│  • Email provider (Resend/Brevo free tier)   │
+│  Cloudflare Worker  (nudge)                  │
+│  • Serves static PWA (Worker Assets)         │
+│  • /api/* — sync, auth, push, calendar       │
+│  • D1: todos, reminders, push_subscriptions  │
+│  • Cron (*/5 min): due reminders → email     │
+│    + web push; calendar agenda refresh       │
+│  • Workers AI: auto-tag on push              │
 └─────────────────────────────────────────────┘
+         │ email          │ web push      │ calendar
+    Resend API       VAPID/FCM/APNs   Google Calendar API
 ```
 
 Reminders are scheduled server-side (D1 + Cron Trigger) so they fire regardless
-of whether any device is awake. Web push uses VAPID keys; the service worker
-displays the notification.
+of whether any device is awake. Web push uses a custom RFC 8291/8292 VAPID
+implementation (`worker/webpush.ts`) with no npm dependencies.
 
 ## 7. Data model (sketch)
 
@@ -227,16 +228,17 @@ displays the notification.
 - **push_subscription**: id, user_id, endpoint, keys, device label
 - **sync metadata**: per-record updated_at / version for last-write-wins
 
-## 8. Tech stack (proposed)
+## 8. Tech stack (as built)
 
-- **Frontend**: React + Vite + TypeScript + a local-first data layer over
-  IndexedDB; recurrence via an RRULE-style library.
-- **UI**: Tailwind CSS v4 + shadcn/ui (Radix primitives), Lucide icons,
-  Inter/system font, Framer Motion for restrained interaction animation.
-- **PWA**: service worker (offline cache + push), web app manifest.
-- **Backend**: Cloudflare Worker (API + auth + cron), D1 (SQLite).
-- **Hosting**: Cloudflare Pages.
-- **Email**: Resend or Brevo free tier.
+- **Frontend**: React 18 + Vite + TypeScript, Dexie (IndexedDB), cmdk, Lucide icons, date-fns
+- **UI**: Tailwind CSS v4 (custom token system in `src/index.css`), dark by default
+- **PWA**: vite-plugin-pwa (injectManifest), Workbox, Web Push via service worker
+- **Backend**: Cloudflare Worker (serves SPA + handles `/api/*` + cron)
+- **Database**: Cloudflare D1 (SQLite)
+- **AI**: Cloudflare Workers AI (`@cf/meta/llama-3.2-1b-instruct`)
+- **Email**: Resend
+- **Web Push**: custom RFC 8291/8292 (Web Crypto API, no npm deps)
+- **Calendar**: Google Calendar API v3 (OAuth 2.0)
 
 ## 8a. UI/UX direction — "Crisp & dense" (Linear-style)
 
@@ -264,20 +266,24 @@ Resolved:
 - ~~History retention~~ → Completed items auto-archive after 30 days; keep only
   the last ~10 occurrences of a recurring todo locally.
 
-## 10. Suggested phased roadmap
+## 10. Roadmap
 
-1. **v0 — Local core (offline only):** todos, due dates, recurrence engine,
-   IndexedDB, responsive UI, PWA install. No account, no sync. Fully usable.
-2. **v1 — Reminders while open + email:** in-app notifications; backend +
-   magic-link auth + email reminders via cron.
-3. **v2 — Durable git backup (§4.9):** mirror full state to a private
-   `nudge-backup` repo (debounced + daily). Cheap insurance; lands as soon as
-   the server holds the dataset.
-4. **v3 — Sync:** multi-device auto-sync with conflict handling.
-5. **v4 — Web push:** reminders that fire with the app closed.
-6. **v5 — AI enhancements (§4.8):** Workers AI auto-tagging first, then optional
-   smart date parsing / suggestions. Introduces tags into the UI.
-7. **v6 — Google Calendar sync (§4.7):** OAuth + one-way sync; 6am daily agenda
-   block + per-time blocks for timed tasks.
-8. **Later:** SMS (optional/paid), lock-screen widget, two-way calendar sync,
-   encrypted backups.
+### Shipped ✅
+- **v0** — Local core: todos, recurrence, IndexedDB, PWA install
+- **v1** — Auth (magic link + password) + email reminders via cron
+- **v2** — Git backup to private GitHub repo (debounced + daily cron)
+- **v3** — Multi-device sync (push/pull, last-write-wins)
+- **v4** — Web push (VAPID, fires with app closed)
+- **v5** — AI auto-tagging (Workers AI, filtered to 10 valid categories); tag filter UI
+- **v6** — Google Calendar sync (OAuth, event upsert/delete, 06:00 daily agenda block)
+
+### Up next
+- **Snooze** — snooze a reminder (+10 min, +1 hour) from the notification
+- **Smart date parsing** — infer due date from natural-language titles
+- **Two-way calendar sync** — detect changes made in Google Calendar
+- **Encrypted backups** — client-side encryption before git push
+
+### Later / deferred
+- SMS reminders (optional, Twilio — paid)
+- Lock-screen / home-screen widget
+- Sharing / collaboration
