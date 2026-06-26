@@ -90,10 +90,20 @@ function MenuHeader({ onClose }: { onClose: () => void }) {
 }
 
 function SignedIn({ session, onClose }: { session: Session; onClose: () => void }) {
-  const [perm, setPerm] = useState(
+  const [perm, setPerm] = useState<NotificationPermission>(
     typeof Notification !== "undefined" ? Notification.permission : "denied",
   );
+  const [subscribed, setSubscribed] = useState(false);
   const [gcal, setGcal] = useState<"loading" | "connected" | "disconnected">("loading");
+
+  // Check for an existing push subscription on mount
+  useEffect(() => {
+    if (!("serviceWorker" in navigator)) return;
+    navigator.serviceWorker.ready
+      .then((reg) => reg.pushManager.getSubscription())
+      .then((sub) => setSubscribed(!!sub))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     fetch("/api/auth/google/status", { credentials: "include" })
@@ -102,10 +112,25 @@ function SignedIn({ session, onClose }: { session: Session; onClose: () => void 
       .catch(() => setGcal("disconnected"));
   }, []);
 
+  const handleNotifications = async () => {
+    const newPerm = await requestAndSubscribePush();
+    setPerm(newPerm);
+    // Re-check whether a subscription actually exists after the attempt
+    if ("serviceWorker" in navigator) {
+      const reg = await navigator.serviceWorker.ready.catch(() => null);
+      const sub = await reg?.pushManager.getSubscription().catch(() => null);
+      setSubscribed(!!sub);
+    }
+  };
+
   const disconnectGcal = async () => {
     await fetch("/api/auth/google/disconnect", { method: "POST", credentials: "include" });
     setGcal("disconnected");
   };
+
+  // "granted" permission alone isn't enough — we must also have an active subscription
+  const isSubscribed = perm === "granted" && subscribed;
+  const isDenied = perm === "denied";
 
   return (
     <div className="space-y-3">
@@ -120,12 +145,15 @@ function SignedIn({ session, onClose }: { session: Session; onClose: () => void 
       </div>
 
       <button
-        onClick={async () => setPerm(await requestAndSubscribePush())}
-        disabled={perm === "granted"}
+        onClick={handleNotifications}
+        disabled={isSubscribed || isDenied}
+        title={isDenied ? "Notifications blocked in browser settings" : undefined}
         className="flex w-full items-center gap-2 rounded-lg border border-[var(--color-border)] px-3 py-2.5 text-sm text-[var(--color-text-dim)] hover:border-[var(--color-border-strong)] hover:text-[var(--color-text)] disabled:opacity-60"
       >
-        {perm === "granted" ? (
+        {isSubscribed ? (
           <><Check className="size-4 text-emerald-400" /> Notifications enabled</>
+        ) : isDenied ? (
+          <><Bell className="size-4" /> Notifications blocked</>
         ) : (
           <><Bell className="size-4" /> Enable notifications</>
         )}
