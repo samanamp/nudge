@@ -24,43 +24,50 @@ function urlB64ToUint8Array(b64: string): Uint8Array {
   return Uint8Array.from(raw, (c) => c.charCodeAt(0));
 }
 
-/** Request notification permission + subscribe to Web Push. Returns the new permission state. */
+/** Request notification permission + subscribe to Web Push.
+ *  Throws a descriptive Error on failure so the caller can surface it. */
 export async function requestAndSubscribePush(): Promise<NotificationPermission> {
-  if (!("Notification" in window) || !("serviceWorker" in navigator)) return "denied";
-  if (Notification.permission === "denied") return "denied";
+  if (!("Notification" in window) || !("serviceWorker" in navigator)) {
+    throw new Error("Push notifications are not supported in this browser");
+  }
+  if (Notification.permission === "denied") {
+    throw new Error("Notifications are blocked — enable them in browser settings");
+  }
 
   const perm = await Notification.requestPermission();
   if (perm !== "granted") return perm;
 
-  try {
-    const reg = await navigator.serviceWorker.ready;
+  // Fetch VAPID public key first (no SW dependency)
+  const keyRes = await fetch("/api/push/key").then((r) => r.json()) as { key?: string };
+  if (!keyRes.key) throw new Error("Could not fetch push key from server");
 
-    // Get VAPID public key from server
-    const { key } = (await fetch("/api/push/key").then((r) => r.json())) as { key: string };
-    if (!key) return perm;
+  // Wait for an active service worker, with timeout
+  const reg = await Promise.race([
+    navigator.serviceWorker.ready,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("Service worker not ready — try reloading the page")), 8000),
+    ),
+  ]);
 
-    // Subscribe (or reuse existing subscription)
-    const keyBytes = urlB64ToUint8Array(key);
-    const sub =
-      (await reg.pushManager.getSubscription()) ??
-      (await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: new Uint8Array(keyBytes.buffer.slice(0) as ArrayBuffer),
-      }));
+  const keyBytes = urlB64ToUint8Array(keyRes.key);
+  const sub =
+    (await reg.pushManager.getSubscription()) ??
+    (await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: keyBytes.buffer.slice(0) as ArrayBuffer,
+    }));
 
-    const json = sub.toJSON();
-    await fetch("/api/push/subscribe", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        endpoint: sub.endpoint,
-        p256dh: json.keys?.p256dh,
-        auth: json.keys?.auth,
-      }),
-    });
-  } catch (e) {
-    console.warn("push subscribe failed:", e);
-  }
+  const subJson = sub.toJSON();
+  const res = await fetch("/api/push/subscribe", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      endpoint: sub.endpoint,
+      p256dh: subJson.keys?.p256dh,
+      auth: subJson.keys?.auth,
+    }),
+  });
+  if (!res.ok) throw new Error(`Server failed to save subscription (${res.status})`);
 
   return perm;
 }

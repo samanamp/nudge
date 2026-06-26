@@ -94,6 +94,8 @@ function SignedIn({ session, onClose }: { session: Session; onClose: () => void 
     typeof Notification !== "undefined" ? Notification.permission : "denied",
   );
   const [subscribed, setSubscribed] = useState(false);
+  const [pushLoading, setPushLoading] = useState(false);
+  const [pushError, setPushError] = useState<string | null>(null);
   const [gcal, setGcal] = useState<"loading" | "connected" | "disconnected">("loading");
 
   // Check for an existing push subscription on mount
@@ -113,13 +115,21 @@ function SignedIn({ session, onClose }: { session: Session; onClose: () => void 
   }, []);
 
   const handleNotifications = async () => {
-    const newPerm = await requestAndSubscribePush();
-    setPerm(newPerm);
-    // Re-check whether a subscription actually exists after the attempt
-    if ("serviceWorker" in navigator) {
-      const reg = await navigator.serviceWorker.ready.catch(() => null);
-      const sub = await reg?.pushManager.getSubscription().catch(() => null);
-      setSubscribed(!!sub);
+    setPushLoading(true);
+    setPushError(null);
+    try {
+      const newPerm = await requestAndSubscribePush();
+      setPerm(newPerm);
+    } catch (e) {
+      setPushError(e instanceof Error ? e.message : "Failed to enable notifications");
+    } finally {
+      // Re-check actual subscription state regardless of outcome
+      if ("serviceWorker" in navigator) {
+        const reg = await navigator.serviceWorker.ready.catch(() => null);
+        const sub = await reg?.pushManager.getSubscription().catch(() => null);
+        setSubscribed(!!sub);
+      }
+      setPushLoading(false);
     }
   };
 
@@ -146,7 +156,7 @@ function SignedIn({ session, onClose }: { session: Session; onClose: () => void 
 
       <button
         onClick={handleNotifications}
-        disabled={isSubscribed || isDenied}
+        disabled={isSubscribed || isDenied || pushLoading}
         title={isDenied ? "Notifications blocked in browser settings" : undefined}
         className="flex w-full items-center gap-2 rounded-lg border border-[var(--color-border)] px-3 py-2.5 text-sm text-[var(--color-text-dim)] hover:border-[var(--color-border-strong)] hover:text-[var(--color-text)] disabled:opacity-60"
       >
@@ -154,10 +164,15 @@ function SignedIn({ session, onClose }: { session: Session; onClose: () => void 
           <><Check className="size-4 text-emerald-400" /> Notifications enabled</>
         ) : isDenied ? (
           <><Bell className="size-4" /> Notifications blocked</>
+        ) : pushLoading ? (
+          <><span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" /> Enabling…</>
         ) : (
           <><Bell className="size-4" /> Enable notifications</>
         )}
       </button>
+      {pushError && (
+        <p className="text-[11px] text-[var(--color-danger)] px-1">{pushError}</p>
+      )}
 
       {gcal !== "loading" && (
         gcal === "connected" ? (
