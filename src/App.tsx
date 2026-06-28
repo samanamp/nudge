@@ -15,6 +15,7 @@ import { EditDialog } from "@/components/EditDialog";
 import { CommandPalette } from "@/components/CommandPalette";
 import { AccountMenu } from "@/components/AccountMenu";
 import { SignInScreen } from "@/components/SignInScreen";
+import { LogoGlyph } from "@/components/Logo";
 import { HabitsView } from "@/components/HabitsView";
 import { TodayHabits } from "@/components/TodayHabits";
 
@@ -178,7 +179,7 @@ export default function App() {
       <header className="flex items-center justify-between py-6">
         <div className="flex items-center gap-3">
           <div className="brand-mark grid size-9 place-items-center rounded-[11px] text-white">
-            <Check className="size-5" strokeWidth={3} />
+            <LogoGlyph className="size-[18px]" />
           </div>
           <div>
             <h1 className="font-display text-[19px] font-bold leading-none tracking-tight">
