@@ -11,6 +11,7 @@ import {
   verifyPassword,
 } from "./auth";
 import { runDueReminders } from "./reminders";
+import { runDueHabitNudges } from "./habitReminders";
 import { backupToGitHub } from "./backup";
 import { suggestTags } from "./ai";
 import { exchangeCode, googleAuthUrl, syncCalendar, updateDailyAgenda, updateAllAgendas } from "./gcal";
@@ -92,6 +93,11 @@ export default {
   async scheduled(_event: ScheduledController, env: Env): Promise<void> {
     const fired = await runDueReminders(env);
     if (fired) console.log(`reminders fired: ${fired}`);
+    const habitFired = await runDueHabitNudges(env).catch((e) => {
+      console.error("habit nudge cron error:", e);
+      return 0;
+    });
+    if (habitFired) console.log(`habit nudges fired: ${habitFired}`);
     await updateAllAgendas(env).catch((e) => console.error("agenda cron error:", e));
   },
 };
