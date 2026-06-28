@@ -1,7 +1,7 @@
 import { format } from "date-fns";
 import { nanoid } from "nanoid";
 import { db } from "./db";
-import { matchEmoji } from "./emoji";
+import { assignEmoji } from "./emoji";
 import type { Habit, HabitLog, HabitLogState } from "./types";
 
 const now = () => Date.now();
@@ -45,15 +45,16 @@ export async function createHabit(
   input: Partial<Habit> & { title: string },
 ): Promise<string> {
   const ts = now();
-  const first = await db.habits.orderBy("sortOrder").first();
-  const minOrder = first?.sortOrder ?? 0;
+  const existing = await db.habits.filter((h) => !h.deletedAt).toArray();
+  const minOrder = existing.reduce((m, h) => Math.min(m, h.sortOrder), 0);
+  const taken = existing.map((h) => h.icon).filter((i): i is string => !!i);
   const habit: Habit = {
     id: nanoid(),
     title: input.title.trim(),
     notes: input.notes,
-    // Curated emoji for known habits (distinct + reliable); unknowns stay blank
-    // so the server's AI can suggest one.
-    icon: input.icon ?? (matchEmoji(input.title.trim()) || undefined),
+    // Distinct curated emoji, avoiding ones already used by other habits.
+    // Unknown titles still resolve to a distinct generic so nothing collides.
+    icon: input.icon ?? (assignEmoji(input.title.trim(), taken) || undefined),
     scheduleModel: input.scheduleModel ?? "fixed_weekdays",
     weekdays: input.weekdays ?? (input.scheduleModel === "flexible" ? undefined : [0, 1, 2, 3, 4, 5, 6]),
     period: input.period,

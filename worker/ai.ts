@@ -76,7 +76,7 @@ export async function suggestEmoji(ai: Ai, title: string, notes?: string): Promi
 /** Keyword → emoji match (kept in sync with src/lib/emoji.ts). "" if no match. */
 function fallbackEmoji(title: string): string {
   const M: [RegExp, string][] = [
-    [/\byoga\b/i, "🧘‍♀️"], [/medit|mindful|breath/i, "🧘"], [/violin/i, "🎻"],
+    [/\byoga\b/i, "🧘"], [/medit|mindful/i, "🪷"], [/breath/i, "🌬️"], [/violin/i, "🎻"],
     [/piano|keyboard/i, "🎹"], [/guitar/i, "🎸"], [/sing|vocal/i, "🎤"], [/music|instrument/i, "🎵"],
     [/run|jog|sprint/i, "🏃"], [/walk|steps/i, "🚶"], [/gym|workout|exercise|lift|weight|strength/i, "🏋️"],
     [/push.?up|pull.?up|\bcore\b|\babs\b/i, "💪"], [/stretch|mobility/i, "🤸"], [/bike|cycl/i, "🚴"],
