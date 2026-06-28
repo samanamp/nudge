@@ -13,7 +13,7 @@ import {
 import { runDueReminders } from "./reminders";
 import { runDueHabitNudges } from "./habitReminders";
 import { backupToGitHub } from "./backup";
-import { suggestTags } from "./ai";
+import { suggestTags, suggestEmoji } from "./ai";
 import { exchangeCode, googleAuthUrl, syncCalendar, updateDailyAgenda, updateAllAgendas } from "./gcal";
 
 export interface Env {
@@ -59,6 +59,8 @@ interface PushItem {
 interface StoredHabit {
   id: string;
   title: string;
+  icon?: string;
+  notes?: string;
   archivedAt?: number;
   deletedAt?: number;
   updatedAt: number;
@@ -308,8 +310,10 @@ async function route(req: Request, env: Env, url: URL, ctx: ExecutionContext): P
       await env.DB.prepare("UPDATE users SET timezone = ? WHERE id = ?").bind(timezone, userId).run();
     }
     await pushHabits(env, userId, habits ?? [], logs ?? []);
+    // AI emoji: synchronous so icons arrive in this response (like auto-tagging).
+    const icons = await suggestHabitEmojis(env, userId, habits ?? []);
     ctx.waitUntil(backupToGitHub(env).catch((e) => console.error("backup error:", e)));
-    return json({ ok: true, habits: habits?.length ?? 0, logs: logs?.length ?? 0 });
+    return json({ ok: true, habits: habits?.length ?? 0, logs: logs?.length ?? 0, icons });
   }
 
   if (p === "/api/habits" && method === "GET") {
@@ -466,4 +470,33 @@ async function pushHabits(
       .bind(l.id, l.habitId, userId, JSON.stringify(l), l.date, l.deletedAt ?? null, l.updatedAt)
       .run();
   }
+}
+
+/**
+ * Suggest an emoji for any habit that lacks one, persist it, and return a
+ * { habitId → emoji } map for the client to apply. Concurrent, 6 s budget.
+ */
+async function suggestHabitEmojis(
+  env: Env,
+  userId: string,
+  habits: StoredHabit[],
+): Promise<Record<string, string>> {
+  if (!env.AI) return {};
+  const need = habits.filter((h) => h?.id && !h.deletedAt && !h.icon);
+  if (need.length === 0) return {};
+
+  const result: Record<string, string> = {};
+  const work = Promise.all(
+    need.map(async (h) => {
+      const emoji = await suggestEmoji(env.AI!, h.title, h.notes);
+      if (!emoji) return;
+      result[h.id] = emoji;
+      await env.DB.prepare("UPDATE habits SET data = ? WHERE id = ? AND user_id = ?")
+        .bind(JSON.stringify({ ...h, icon: emoji }), h.id, userId)
+        .run();
+    }),
+  );
+  const timeout = new Promise<void>((resolve) => setTimeout(resolve, 6000));
+  await Promise.race([work, timeout]);
+  return result;
 }
