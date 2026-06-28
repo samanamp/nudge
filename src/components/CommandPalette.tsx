@@ -1,6 +1,6 @@
 import { Command } from "cmdk";
 import { useEffect, useState } from "react";
-import { CheckCircle2, Moon, Plus, Sun } from "lucide-react";
+import { CheckCircle2, Palette, Plus } from "lucide-react";
 import type { Todo } from "@/lib/types";
 import { formatDue } from "@/lib/dates";
 
@@ -9,7 +9,6 @@ interface Props {
   onNew: () => void;
   onOpen: (todo: Todo) => void;
   onToggleTheme: () => void;
-  theme: "dark" | "light";
 }
 
 /** ⌘K command palette: quick actions + fuzzy jump to any task. */
@@ -18,7 +17,6 @@ export function CommandPalette({
   onNew,
   onOpen,
   onToggleTheme,
-  theme,
 }: Props) {
   const [open, setOpen] = useState(false);
 
@@ -67,17 +65,8 @@ export function CommandPalette({
             <Item onSelect={() => run(onNew)} icon={<Plus className="size-4" />}>
               New task
             </Item>
-            <Item
-              onSelect={() => run(onToggleTheme)}
-              icon={
-                theme === "dark" ? (
-                  <Sun className="size-4" />
-                ) : (
-                  <Moon className="size-4" />
-                )
-              }
-            >
-              Switch to {theme === "dark" ? "light" : "dark"} theme
+            <Item onSelect={() => run(onToggleTheme)} icon={<Palette className="size-4" />}>
+              Next theme
             </Item>
           </Command.Group>
 
