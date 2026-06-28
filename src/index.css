@@ -117,6 +117,17 @@ body {
   padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
 }
 
+/* Brand mark "ping" — ripples gently breathe outward (sign-in). */
+@keyframes logo-ping {
+  0%, 100% { opacity: 0.3; }
+  45% { opacity: 1; }
+}
+.logo-ping { animation: logo-ping 2.6s ease-in-out infinite; }
+.logo-ping-2 { animation-delay: 0.45s; }
+@media (prefers-reduced-motion: reduce) {
+  .logo-ping { animation: none; opacity: 1; }
+}
+
 /* Row flash — brief accent pulse when a task is newly added */
 @keyframes flash-in {
   0% { background-color: color-mix(in oklab, var(--color-accent) 18%, transparent); }
