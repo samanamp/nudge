@@ -6,6 +6,15 @@ import { describeRecurrence } from "@/lib/recurrence";
 import { toggleComplete } from "@/lib/db";
 import { Checkbox } from "./Checkbox";
 
+// Tag color: in themes that define ANSI hues (Homebrew) tags get varied colors
+// like syntax highlighting; everywhere else they fall back to the accent text.
+const TAG_HUES = ["--ansi-cyan", "--ansi-amber", "--ansi-magenta", "--ansi-blue", "--ansi-green"];
+function tagColor(tag: string): string {
+  let h = 0;
+  for (let i = 0; i < tag.length; i++) h = (h * 31 + tag.charCodeAt(i)) >>> 0;
+  return `var(${TAG_HUES[h % TAG_HUES.length]}, var(--color-accent-text))`;
+}
+
 interface Props {
   todo: Todo;
   selected: boolean;
@@ -77,7 +86,8 @@ export function TodoRow({ todo, selected, flash, completing, onToggle, onSelect,
                       e.stopPropagation();
                       onTagClick?.(tag);
                     }}
-                    className="rounded px-1.5 py-px text-[10px] font-medium bg-[var(--color-accent)]/12 text-[var(--color-accent-text)] hover:bg-[var(--color-accent)]/20 transition-colors"
+                    style={{ color: tagColor(tag) }}
+                    className="rounded px-1.5 py-px text-[10px] font-medium bg-[var(--color-accent)]/12 hover:bg-[var(--color-accent)]/20 transition-colors"
                   >
                     {tag}
                   </button>

@@ -63,23 +63,38 @@
   --color-accent-text: #5b50f0;
 }
 
-/* Homebrew — classic green-on-black Mac Terminal. Mono-leaning, geeky. */
+/* Homebrew — green-on-black Mac Terminal, but with the FULL ANSI palette so it
+   reads like a real syntax-highlighted shell, not a monochrome wall of green.
+   Foundation: green text on near-black. Accents borrow ANSI cyan / amber / red /
+   magenta so different roles each get their own hue. The terminal feel is
+   reinforced by switching the body font to mono. */
 :root.theme-homebrew {
   color-scheme: dark;
-  --color-bg: #020402;
-  --color-surface: #07120b;
-  --color-surface-2: #0d2014;
-  --color-border: #14361f;
-  --color-border-strong: #1f5230;
-  --color-text: #c8facc;
-  --color-text-dim: #6fcf8f;
-  --color-text-faint: #4f9d6a;
-  --color-accent: #1faa59;
-  --color-accent-2: #36d399;
-  --color-accent-soft: #36d39922;
-  --color-accent-text: #4ade80;
-  --color-accent-fg: #02160a;
-  --color-danger: #ff6b6b;
+  --font-sans: var(--font-mono);
+  --color-bg: #050805;
+  --color-surface: #0a140d;
+  --color-surface-2: #122318;
+  --color-border: #1d3a27;
+  --color-border-strong: #2c5a3b;
+  /* Soft green-white text so the colored accents actually pop. */
+  --color-text: #e6ffe9;
+  --color-text-dim: #79d59b;
+  --color-text-faint: #56a374;
+  --color-accent: #1ba94f;        /* ANSI green — buttons, brand, progress */
+  --color-accent-2: #22d3ee;      /* ANSI cyan — gradient end */
+  --color-accent-soft: #22d3ee22;
+  --color-accent-text: #34e0d0;   /* cyan/teal — tags & links (≠ green text) */
+  --color-accent-fg: #021207;
+  --color-danger: #ff5f56;        /* ANSI red — overdue / destructive */
+}
+/* ANSI accent hues used to color-vary tags & meta in Homebrew (see TagChip). */
+:root.theme-homebrew {
+  --ansi-cyan: #2ee6d6;
+  --ansi-amber: #f7c948;
+  --ansi-magenta: #ff7ad9;
+  --ansi-blue: #5cb3ff;
+  --ansi-green: #4ade80;
+  --ansi-red: #ff8a8a;
 }
 
 /* Amber CRT — warm phosphor terminal. Answers "too cold". */
