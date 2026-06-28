@@ -209,12 +209,12 @@ export function HabitCard({ habit, logs, onEdit }: Props) {
       </div>
 
       {/* Rates + trend */}
-      <div className="mt-2.5 flex items-center gap-3 text-[11px] text-[var(--color-text-faint)]">
+      <div className="mt-3 flex items-center gap-4 border-t border-[var(--color-border)] pt-2.5 text-[11px]">
         <Stat label="7d" value={pct(s.rate7)} />
         <Stat label="30d" value={pct(s.rate30)} />
         <Stat label="90d" value={pct(s.rate90)} />
         {tr && (
-          <span className={cn("ml-auto flex items-center gap-1", tr.cls)}>
+          <span className={cn("ml-auto flex items-center gap-1 font-medium", tr.cls)}>
             <tr.icon className="size-3" />
             {tr.label}
           </span>
@@ -227,7 +227,8 @@ export function HabitCard({ habit, logs, onEdit }: Props) {
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <span className="tabular-nums">
-      <span className="font-medium text-[var(--color-text-dim)]">{value}</span> {label}
+      <span className="font-semibold text-[var(--color-text)]">{value}</span>{" "}
+      <span className="text-[var(--color-text-faint)]">{label}</span>
     </span>
   );
 }
