@@ -46,7 +46,13 @@ const MAP: [RegExp, string][] = [
   [/focus|deep work|productiv/i, "🎯"],
 ];
 
-export function guessEmoji(title: string): string {
+/** Curated emoji for a habit title, or "" if nothing matches. */
+export function matchEmoji(title: string): string {
   for (const [re, e] of MAP) if (re.test(title)) return e;
-  return "✨";
+  return "";
+}
+
+/** Curated emoji, falling back to a generic sparkle for unknown titles. */
+export function guessEmoji(title: string): string {
+  return matchEmoji(title) || "✨";
 }
