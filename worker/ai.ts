@@ -40,3 +40,28 @@ export async function suggestTags(
     return [];
   }
 }
+
+/**
+ * Suggest a single emoji that represents a habit (e.g. "Meditation" → 🧘).
+ * Returns "" if AI is unavailable or no emoji could be extracted.
+ */
+export async function suggestEmoji(ai: Ai, title: string, notes?: string): Promise<string> {
+  try {
+    const result = (await ai.run("@cf/meta/llama-3.2-1b-instruct", {
+      messages: [
+        {
+          role: "system",
+          content:
+            "You pick the single best emoji to represent a habit. Reply with ONLY one emoji character and nothing else.",
+        },
+        { role: "user", content: `Habit: "${title}"${notes ? ` (${notes})` : ""}` },
+      ],
+      max_tokens: 8,
+    })) as AiTextResult;
+    const match = (result.response ?? "").match(/\p{Extended_Pictographic}/u);
+    return match ? match[0] : "";
+  } catch (e) {
+    console.warn("AI emoji suggestion failed:", e);
+    return "";
+  }
+}

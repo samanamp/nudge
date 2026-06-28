@@ -62,7 +62,7 @@ export const api = {
 
   /** One-way upsert of habits + logs (last-write-wins on updatedAt). */
   pushHabits: (habits: Habit[], logs: HabitLog[]) =>
-    req<{ ok: true; habits: number; logs: number }>("/api/habits/push", {
+    req<{ ok: true; habits: number; logs: number; icons?: Record<string, string> }>("/api/habits/push", {
       method: "POST",
       body: JSON.stringify({
         habits,

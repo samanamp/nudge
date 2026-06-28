@@ -204,8 +204,12 @@ export function usePushHabits(
     timer.current = window.setTimeout(() => {
       api
         .pushHabits(habits, logs)
-        .then(() => {
+        .then(async (result) => {
           lastSig.current = sig;
+          // Apply AI-suggested emojis without bumping updatedAt (no re-push loop).
+          for (const [id, icon] of Object.entries(result.icons ?? {})) {
+            await db.habits.update(id, { icon });
+          }
         })
         .catch(() => {});
     }, 1500);
