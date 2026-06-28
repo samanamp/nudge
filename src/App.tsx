@@ -13,9 +13,12 @@ import { EditDialog } from "@/components/EditDialog";
 import { CommandPalette } from "@/components/CommandPalette";
 import { AccountMenu } from "@/components/AccountMenu";
 import { SignInScreen } from "@/components/SignInScreen";
+import { HabitsView } from "@/components/HabitsView";
+import { TodayHabits } from "@/components/TodayHabits";
 
 export default function App() {
   const [theme, toggleTheme] = useTheme();
+  const [view, setView] = useState<"todos" | "habits">("todos");
   const [editing, setEditing] = useState<Todo | null>(null);
   const [selected, setSelected] = useState(0);
   const [showCompleted, setShowCompleted] = useState(false);
@@ -209,13 +212,35 @@ export default function App() {
         </div>
       </header>
 
+      {/* View tabs */}
+      <div className="mb-3 flex gap-1 rounded-lg border border-[var(--color-border)] p-0.5 text-xs">
+        {(["todos", "habits"] as const).map((v) => (
+          <button
+            key={v}
+            onClick={() => setView(v)}
+            className={
+              "flex-1 rounded-md py-1.5 font-medium capitalize transition-colors " +
+              (view === v
+                ? "bg-[var(--color-surface-2)] text-[var(--color-text)]"
+                : "text-[var(--color-text-dim)] hover:text-[var(--color-text)]")
+            }
+          >
+            {v}
+          </button>
+        ))}
+      </div>
+
+      {view === "habits" && <HabitsView />}
+
       {/* Desktop quick-add */}
+      {view === "todos" && (
       <div className="hidden sm:block">
         <QuickAdd ref={quickAddRef} onCreated={handleCreated} />
       </div>
+      )}
 
       {/* Active tag filter chip */}
-      {activeTag && (
+      {view === "todos" && activeTag && (
         <div className="mt-2 flex items-center gap-2">
           <button
             onClick={() => setActiveTag(null)}
@@ -233,7 +258,9 @@ export default function App() {
         </div>
       )}
 
+      {view === "todos" && (
       <main className="flex-1 py-4">
+        <TodayHabits onOpenHabits={() => setView("habits")} />
         {flat.length === 0 && groups.length === 0 ? (
           activeTag ? (
             <div className="grid place-items-center py-24 text-center">
@@ -302,13 +329,17 @@ export default function App() {
           </p>
         )}
       </main>
+      )}
 
       {/* Mobile quick-add (sticky bottom) */}
+      {view === "todos" && (
       <div className="sticky bottom-0 -mx-4 border-t border-[var(--color-border)] bg-[var(--color-bg)] px-4 py-2 safe-bottom sm:hidden">
         <QuickAdd ref={quickAddRef} onCreated={handleCreated} />
       </div>
+      )}
 
       {/* Footer keyboard hints (desktop) */}
+      {view === "todos" && (
       <footer className="hidden items-center gap-3 py-3 text-[11px] text-[var(--color-text-faint)] sm:flex">
         <span className="flex items-center gap-1">
           <Kbd><CommandIcon className="inline size-2.5" />K</Kbd> command
@@ -318,6 +349,7 @@ export default function App() {
         <span><Kbd>X</Kbd> complete</span>
         <span><Kbd>N</Kbd> new</span>
       </footer>
+      )}
 
       {editing && (
         <EditDialog

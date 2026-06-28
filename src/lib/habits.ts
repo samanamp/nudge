@@ -10,6 +10,19 @@ export function dayKey(d: Date | number = new Date()): string {
   return format(d, "yyyy-MM-dd");
 }
 
+const WEEKDAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+/** Human label for a habit's schedule, e.g. "Mon Wed Fri" or "5×/week". */
+export function describeSchedule(h: Habit): string {
+  if (h.scheduleModel === "flexible") {
+    const t = Math.max(1, h.targetCount ?? 1);
+    return `${t}×/${h.period === "month" ? "month" : "week"}`;
+  }
+  const wd = h.weekdays && h.weekdays.length ? [...h.weekdays].sort() : [0, 1, 2, 3, 4, 5, 6];
+  if (wd.length === 7) return "Every day";
+  return wd.map((d) => WEEKDAY_NAMES[d]).join(" ");
+}
+
 /** Backfill missing fields so a partial/older record can't crash rendering. */
 export function normalizeHabit(h: Habit): Habit {
   return {
@@ -127,11 +140,15 @@ export async function clearLog(habitId: string, date = dayKey()): Promise<void> 
 }
 
 /**
- * Toggle today's "done" for a habit. For binary habits this is a one-tap
- * mark/unmark. For measured habits, pass an amount; toggling off clears it.
+ * Toggle "done" for a habit on a given day (defaults to today). For binary
+ * habits this is a one-tap mark/unmark; for measured habits pass an amount.
+ * Used for today's logging and heatmap backfill of past days.
  */
-export async function toggleToday(habitId: string, amount?: number): Promise<void> {
-  const date = dayKey();
+export async function toggleDone(
+  habitId: string,
+  date = dayKey(),
+  amount?: number,
+): Promise<void> {
   const existing = await getLog(habitId, date);
   if (existing && existing.state === "done") {
     await clearLog(habitId, date);
@@ -139,6 +156,10 @@ export async function toggleToday(habitId: string, amount?: number): Promise<voi
     await logHabit(habitId, { date, state: "done", amount });
   }
 }
+
+/** Convenience: toggle today's done state. */
+export const toggleToday = (habitId: string, amount?: number) =>
+  toggleDone(habitId, dayKey(), amount);
 
 // ── Sync merge (newer-wins, additive — mirrors mergeServerTodos) ──────────────
 
