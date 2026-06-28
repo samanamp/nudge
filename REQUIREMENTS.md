@@ -1,6 +1,6 @@
 # Nudge — Requirements
 
-_Last updated: 2026-06-25 · Live at https://nudge.edge.bond_
+_Last updated: 2026-06-28 · Live at https://nudge.edge.bond_
 
 A local-first, offline-capable todo app for the browser, working cleanly on
 mobile and desktop, with time-sensitive todos, flexible recurrence, and
@@ -177,6 +177,99 @@ point-in-time disaster recovery.
 - **Privacy**: private repo; contains personal task text. Treated as sensitive;
   PAT least-privilege; optional client-side encryption is a future option.
 
+### 4.10 Habits — alerting, tracking & reporting 🟡 planned
+
+Habits are recurring personal practices (e.g. **yoga, meditation, violin**) where
+the value is **consistency over time**, not one-off completion. A habit is a
+**first-class entity, distinct from a todo**: a todo is done once and archived; a
+habit is _expected repeatedly_ and the interesting data is the **log of each
+occurrence** (streaks, completion rate, trends). Habits **reuse** the existing
+recurrence engine (§4.2) and the server-side reminder/cron pipeline (§4.3), but
+own a separate **append-only completion log** so history is never lost when an
+occurrence rolls forward.
+
+#### 4.10.1 Habit definition
+- Create / edit / archive / delete a habit. Fields: title, optional notes,
+  optional icon/emoji, schedule (below), measurement type (below), target time
+  of day, alerting config, tags (reuses §4.8 vocabulary), timestamps.
+- Habits are **archivable** (hidden from daily view, history retained) and
+  soft-deletable (tombstone, like todos) so backup/sync stay consistent.
+
+#### 4.10.2 Schedule — when a habit is "expected" (both models, per habit)
+Each habit picks **one** scheduling model:
+- **Fixed weekdays** — expected on specific days (e.g. yoga **Mon/Wed/Fri**).
+  Reuses the weekly `RecurrenceRule.weekdays`. A day not in the set is an **off
+  day** (never counted as a miss, never nagged).
+- **Flexible target** — a periodic count with no fixed days (e.g. meditate **5×
+  per week**, violin **20× per month**). Any day can satisfy it; the period
+  (week/month) is the unit of success, not the individual day.
+- Daily ("every day") is the trivial fixed case (all 7 weekdays).
+- Timezone-aware: "today" and period boundaries use the user's local time.
+
+#### 4.10.3 Measurement — per-habit choice (binary or measured)
+Each habit picks **one** measurement type:
+- **Binary** — done / skipped / missed (e.g. yoga: "did it or not").
+- **Measured** — a numeric amount per session with a **unit** and optional
+  **per-session target** (e.g. meditation **20 min**, violin **30 min**,
+  pushups **50 reps**). Logging captures the amount; a session counts as "done"
+  when logged (optionally: only when it meets the target — configurable).
+- Optional free-text **note** per log entry, regardless of type.
+
+#### 4.10.4 Logging & state
+- **Log an occurrence** in one tap: mark today done (and undo). Measured habits
+  prompt for the amount (with the last value pre-filled for speed).
+- Three states per expected occurrence: **done**, **skip** (intentional rest —
+  preserves streak), **miss** (expected but not done — breaks streak). Misses are
+  **derived** when an expected day/period passes without a log, not stored
+  eagerly.
+- **Backfill**: log or amend a past day (e.g. forgot to log yesterday). Editing
+  history recomputes streaks/stats.
+- **Log from the notification** where the platform allows (notification action →
+  "Mark done" / "Skip"), falling back to deep-linking into the app.
+
+#### 4.10.5 Alerting (reuses §4.3 cron + email/push)
+- Per-habit **scheduled nudge** at the habit's target time of day, **only on
+  expected days** (fixed model) or while the period target is unmet (flexible
+  model). No nag on off days or once the period goal is met.
+- **Escalation (optional)**: if not logged by end of the expected window, a
+  follow-up nudge ("you haven't done yoga today").
+- **Streak-at-risk (optional)**: warn when an active streak is about to break
+  (e.g. last expected day of the period with the target still unmet).
+- Channels: email + web push, same as todo reminders; user picks per habit.
+- Snooze applies (consistent with §4.3 once shipped).
+
+#### 4.10.6 Tracking metrics (per habit)
+- **Current streak** and **longest streak** (skips don't break; misses do).
+- **Completion rate** over rolling 7 / 30 / 90 days (and per period for flexible
+  habits, e.g. "4 / 5 this week").
+- For measured habits: **total** and **average** amount over a window
+  (e.g. "320 min meditation this month, avg 16 min/session").
+- **Last done** + days since.
+
+#### 4.10.7 Reporting (heatmap + streaks + cross-habit review)
+- **Per-habit detail**: GitHub-style **calendar heatmap**, current/longest
+  streak, completion % over 7/30/90 days, and (measured) amount totals/averages.
+- **Cross-habit review**: a **weekly / monthly summary** across all habits —
+  per-habit completion vs target, overall consistency, and a **trend** signal
+  (improving / steady / slipping vs the prior period).
+- Reporting is **read-only and derived** from the log; it never mutates state.
+
+#### 4.10.8 Placement & UX
+- Habits live in their **own section/view** (definitions, history, reports), kept
+  out of the Overdue/Today/Upcoming todo grouping (§4.1) to avoid tangling.
+- **Today's due habits are surfaced at the top of the main todo list** as a
+  compact strip for one-glance daily logging (tap to mark done), without making
+  them todos.
+- Follows the "Crisp & dense" direction (§8a): fast logging, keyboard-friendly on
+  desktop, swipe/tap on mobile, restrained motion.
+
+#### 4.10.9 Sync, backup & offline
+- Habits and their logs are **offline-first** (IndexedDB) and sync via the same
+  push/pull + last-write-wins model as todos (§4.4). Logs are append-mostly;
+  edits/backfills carry `updatedAt` for conflict resolution.
+- Included in the git backup snapshot (§4.9): `data/habits.json` +
+  `data/habit_logs.json`, and reflected in the human-readable view.
+
 ## 5. Non-functional requirements
 
 - **Cost**: stays within Cloudflare + email-provider free tiers for one user.
@@ -226,6 +319,14 @@ implementation (`worker/webpush.ts`) with no npm dependencies.
   - recurring: window_start (offset before due or absolute), cadence rule
     (e.g. daily at 09:00), stop_condition (on_complete | at_due), time_of_day
 - **push_subscription**: id, user_id, endpoint, keys, device label
+- **habit** (§4.10): id, user_id, title, notes, icon, schedule (model:
+  `fixed_weekdays` → recurrence_rule | `flexible` → period[week|month] + target
+  count), measurement (type[binary|measured], unit?, target_amount?,
+  count_done_only_if_target?), time_of_day, alerting (channels, escalate?,
+  streak_at_risk?), tags, archived_at, created_at, updated_at, deleted_at
+- **habit_log** (§4.10): id, habit_id, user_id, date (local day), state[done|
+  skip], amount? (measured), note?, created_at, updated_at, deleted_at
+  - "miss" is **derived** (expected day/period with no log), never stored
 - **sync metadata**: per-record updated_at / version for last-write-wins
 
 ## 8. Tech stack (as built)
@@ -278,6 +379,10 @@ Resolved:
 - **v6** — Google Calendar sync (OAuth, event upsert/delete, 06:00 daily agenda block)
 
 ### Up next
+- **v7 — Habits** (§4.10): habit entity + completion log; fixed-weekday &
+  flexible-target schedules; binary & measured tracking; per-habit alerting
+  (reuses cron/push); streaks + heatmap + cross-habit weekly/monthly review;
+  today's-habits strip atop the main list; backup + sync coverage
 - **Snooze** — snooze a reminder (+10 min, +1 hour) from the notification
 - **Smart date parsing** — infer due date from natural-language titles
 - **Two-way calendar sync** — detect changes made in Google Calendar
