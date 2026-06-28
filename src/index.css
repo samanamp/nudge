@@ -196,15 +196,19 @@ body {
   padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
 }
 
-/* Brand mark "ping" — ripples gently breathe outward (sign-in). */
+/* Brand mark "ping" — the notification dot emits a gentle ripple (sign-in). */
 @keyframes logo-ping {
-  0%, 100% { opacity: 0.3; }
-  45% { opacity: 1; }
+  0% { transform: scale(0.5); opacity: 0.8; }
+  70% { opacity: 0; }
+  100% { transform: scale(1.6); opacity: 0; }
 }
-.logo-ping { animation: logo-ping 2.6s ease-in-out infinite; }
-.logo-ping-2 { animation-delay: 0.45s; }
+.logo-ping {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: logo-ping 2.4s ease-out infinite;
+}
 @media (prefers-reduced-motion: reduce) {
-  .logo-ping { animation: none; opacity: 1; }
+  .logo-ping { animation: none; opacity: 0; }
 }
 
 /* Task completion exit — a satisfying strike + glide-out, then collapse so the
