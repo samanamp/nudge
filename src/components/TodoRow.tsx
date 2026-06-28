@@ -73,7 +73,7 @@ export function TodoRow({ todo, selected, flash, onSelect, onOpen, onTagClick }:
                       e.stopPropagation();
                       onTagClick?.(tag);
                     }}
-                    className="rounded px-1.5 py-px text-[10px] font-medium bg-[var(--color-accent)]/10 text-[var(--color-accent)] hover:bg-[var(--color-accent)]/20 transition-colors"
+                    className="rounded px-1.5 py-px text-[10px] font-medium bg-[var(--color-accent)]/12 text-[var(--color-accent-text)] hover:bg-[var(--color-accent)]/20 transition-colors"
                   >
                     {tag}
                   </button>
