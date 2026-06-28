@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Flame, Pencil, TrendingUp, TrendingDown, Minus, Check } from "lucide-react";
 import type { Habit, HabitLog } from "@/lib/types";
 import { cn } from "@/lib/cn";
-import { summarize, type Trend } from "@/lib/habitStats";
+import { summarize, isDueToday, type Trend } from "@/lib/habitStats";
 import { describeSchedule, toggleDone, logHabit, clearLog, dayKey } from "@/lib/habits";
 import { guessEmoji } from "@/lib/emoji";
 import { HabitHeatmap } from "./HabitHeatmap";
@@ -49,9 +49,17 @@ export function HabitCard({ habit, logs, onEdit }: Props) {
   };
 
   const tr = TREND[s.trend];
+  const needsToday = isDueToday(habit, logs) && !doneToday;
 
   return (
-    <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3.5">
+    <div
+      className={cn(
+        "rounded-xl border bg-[var(--color-surface)] p-3.5 transition-colors",
+        needsToday
+          ? "border-[var(--color-border-strong)] border-l-2 border-l-[var(--color-accent)]"
+          : "border-[var(--color-border)]",
+      )}
+    >
       {/* Header */}
       <div className="flex items-start gap-3">
         <button
@@ -60,10 +68,12 @@ export function HabitCard({ habit, logs, onEdit }: Props) {
           aria-pressed={doneToday}
           title={doneToday ? "Logged today — tap for options" : "Mark done today"}
           className={cn(
-            "relative mt-0.5 grid size-10 shrink-0 place-items-center rounded-xl border text-xl transition-colors",
+            "relative mt-0.5 grid size-11 shrink-0 place-items-center rounded-xl border text-2xl transition-colors",
             doneToday
-              ? "border-[var(--color-accent)] bg-[var(--color-accent)]/12"
-              : "border-[var(--color-border-strong)] hover:border-[var(--color-accent)]",
+              ? "border-[var(--color-accent)] bg-[var(--color-accent)]/15"
+              : needsToday
+                ? "border-[var(--color-accent)] bg-[var(--color-accent)]/5 ring-4 ring-[var(--color-accent)]/10 hover:bg-[var(--color-accent)]/12"
+                : "border-[var(--color-border-strong)] hover:border-[var(--color-accent)]",
           )}
         >
           <span>{habit.icon || guessEmoji(habit.title)}</span>
@@ -76,23 +86,32 @@ export function HabitCard({ habit, logs, onEdit }: Props) {
 
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <h3 className="truncate text-[14px] font-medium leading-tight">{habit.title}</h3>
+            <h3 className="min-w-0 flex-1 truncate text-[15px] font-semibold leading-tight">
+              {habit.title}
+            </h3>
             <button
               onClick={onEdit}
-              className="rounded p-1 text-[var(--color-text-faint)] opacity-0 transition-opacity hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] group-hover:opacity-100 sm:opacity-60"
+              className="shrink-0 rounded p-1 text-[var(--color-text-faint)] transition-colors hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
               title="Edit habit"
             >
               <Pencil className="size-3.5" />
             </button>
           </div>
-          <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-[var(--color-text-faint)]">
+          <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-[var(--color-text-faint)]">
+            {doneToday ? (
+              <span className="rounded-full bg-[var(--color-accent)]/15 px-1.5 py-0.5 text-[10px] font-semibold text-[var(--color-accent)]">
+                ✓ done
+              </span>
+            ) : needsToday ? (
+              <span className="rounded-full bg-amber-400/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-400">
+                do today
+              </span>
+            ) : null}
             <span>{describeSchedule(habit)}</span>
             {measured && habit.targetAmount != null && (
               <>
                 <span className="opacity-40">·</span>
-                <span>
-                  {habit.targetAmount} {habit.unit ?? ""} target
-                </span>
+                <span>{habit.targetAmount} {habit.unit ?? ""}</span>
               </>
             )}
             <span className="opacity-40">·</span>
@@ -102,18 +121,20 @@ export function HabitCard({ habit, logs, onEdit }: Props) {
           </p>
         </div>
 
-        {/* Streak */}
-        <div className="shrink-0 text-right">
-          <div
-            className={cn(
-              "flex items-center justify-end gap-1 text-[15px] font-semibold tabular-nums",
-              s.current > 0 ? "text-[var(--color-accent)]" : "text-[var(--color-text-faint)]",
-            )}
-          >
-            <Flame className="size-3.5" />
-            {s.current}
+        {/* Streak — the emotional hook */}
+        <div className="shrink-0 pl-1 text-right">
+          <div className="flex items-baseline justify-end gap-1">
+            <Flame
+              className={cn(
+                "size-4 self-center",
+                s.current > 0 ? "text-amber-400" : "text-[var(--color-text-faint)]",
+              )}
+            />
+            <span className="text-2xl font-bold leading-none tabular-nums">{s.current}</span>
           </div>
-          <div className="text-[10px] text-[var(--color-text-faint)]">best {s.longest}</div>
+          <div className="mt-1 text-[10px] text-[var(--color-text-faint)]">
+            best {s.longest}
+          </div>
         </div>
       </div>
 

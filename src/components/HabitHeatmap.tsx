@@ -6,10 +6,11 @@ import { cn } from "@/lib/cn";
 const WEEKS = 26; // ~6 months — fills the card width as a contribution graph
 
 // Filled squares (GitHub-style); empty days are a faint fill, never an outline.
+// Misses are a quiet warm tint — present but never a "wall of red".
 const CELL: Record<DayStatus, string> = {
   done: "bg-[var(--color-accent)]",
-  skip: "bg-[var(--color-text-dim)]/40",
-  miss: "bg-[var(--color-danger)]/20",
+  skip: "bg-[var(--color-text-dim)]/35",
+  miss: "bg-[var(--color-danger)]/12",
   none: "bg-[var(--color-surface-2)]",
   off: "bg-[var(--color-surface-2)]/40",
   future: "bg-transparent",

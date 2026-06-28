@@ -120,6 +120,9 @@ export function dayStatus(
     if (countsAsDone(habit, log)) return "done";
   }
 
+  // Days before the habit existed are not misses — render them empty.
+  if (dateKey < keyOf(new Date(habit.createdAt ?? 0))) return "off";
+
   if (habit.scheduleModel === "flexible") {
     // No per-day expectation; the period is the unit of success.
     return "none";
@@ -244,10 +247,16 @@ export function completionRate(
   today: Date = new Date(),
 ): number | null {
   const todayKey = keyOf(today);
+  // Don't penalise a habit for days before it existed: clamp the window start.
+  const created = new Date(habit.createdAt ?? 0);
+  const windowStart = addDays(today, -(windowDays - 1));
+  const start = windowStart > created ? windowStart : created;
+  const startKey = keyOf(start);
+
   if (habit.scheduleModel === "flexible") {
     const target = Math.max(1, habit.targetCount ?? 1);
     let periods = 0;
-    let cursor = periodStart(habit, addDays(today, -(windowDays - 1)));
+    let cursor = periodStart(habit, start);
     const end = periodStart(habit, today);
     for (let i = 0; i < MAX_ITERS && cursor <= end; i++) {
       periods++;
@@ -255,10 +264,8 @@ export function completionRate(
     }
     if (periods === 0) return null;
     let done = 0;
-    const start = addDays(today, -(windowDays - 1));
     for (const log of logs.values()) {
-      const d = parseDay(log.date);
-      if (d >= start && d <= today && countsAsDone(habit, log)) done++;
+      if (log.date >= startKey && log.date <= todayKey && countsAsDone(habit, log)) done++;
     }
     return Math.min(1, done / (target * periods));
   }
@@ -268,8 +275,9 @@ export function completionRate(
   let done = 0;
   for (let i = 0; i < windowDays; i++) {
     const cursor = addDays(today, -i);
-    if (!expectedWeekday(habit, cursor)) continue;
     const key = keyOf(cursor);
+    if (key < startKey) break; // before the habit existed
+    if (!expectedWeekday(habit, cursor)) continue;
     const log = logs.get(key);
     if (log?.state === "skip") continue; // rest day — excluded
     if (key === todayKey && !log) continue; // not due yet
