@@ -15,6 +15,8 @@ export function Checkbox({ checked, onToggle, className }: Props) {
       aria-checked={checked}
       onClick={(e) => {
         e.stopPropagation();
+        // A tiny haptic tick on completion makes ticking off feel tactile.
+        if (!checked) navigator.vibrate?.(10);
         onToggle();
       }}
       className={cn(

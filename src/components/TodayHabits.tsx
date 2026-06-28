@@ -68,7 +68,7 @@ export function TodayHabits({ onOpenHabits }: { onOpenHabits: () => void }) {
             className={cn(
               "flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors",
               done
-                ? "border-[var(--color-accent)] bg-[var(--color-accent)]/10 text-[var(--color-accent)]"
+                ? "border-[var(--color-accent)] bg-[var(--color-accent)]/10 text-[var(--color-accent-text)]"
                 : "border-[var(--color-border)] text-[var(--color-text-dim)] hover:border-[var(--color-border-strong)]",
             )}
           >

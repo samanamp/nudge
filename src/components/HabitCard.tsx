@@ -99,7 +99,7 @@ export function HabitCard({ habit, logs, onEdit }: Props) {
           </div>
           <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-[var(--color-text-faint)]">
             {doneToday ? (
-              <span className="rounded-full bg-[var(--color-accent)]/15 px-1.5 py-0.5 text-[10px] font-semibold text-[var(--color-accent)]">
+              <span className="rounded-full bg-[var(--color-accent)]/15 px-1.5 py-0.5 text-[10px] font-semibold text-[var(--color-accent-text)]">
                 ✓ done
               </span>
             ) : needsToday ? (

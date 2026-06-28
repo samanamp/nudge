@@ -92,6 +92,13 @@ export default function App() {
     [todos],
   );
 
+  // Positive "done today" tally — completion should feel like accomplishment.
+  const doneToday = useMemo(() => {
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    return todos.filter((t) => t.completedAt && t.completedAt >= start.getTime()).length;
+  }, [todos]);
+
   const overdueCount = useMemo(
     () => groupTodos(todos).find((g) => g.key === "overdue")?.todos.length ?? 0,
     [todos],
@@ -187,6 +194,14 @@ export default function App() {
             </h1>
             <p className="mt-1 flex flex-wrap items-center gap-1.5 font-mono text-[11px] text-[var(--color-text-faint)]">
               <span className="tabular-nums">{displayCount}</span> {countLabel}
+              {doneToday > 0 && (
+                <>
+                  <span className="text-[var(--color-text-faint)]/50">·</span>
+                  <span className="font-semibold text-emerald-400">
+                    {doneToday} done today
+                  </span>
+                </>
+              )}
               {overdueCount > 0 && (
                 <>
                   <span className="text-[var(--color-text-faint)]/50">·</span>
@@ -258,7 +273,7 @@ export default function App() {
         <div className="mt-2 flex items-center gap-2">
           <button
             onClick={() => setActiveTag(null)}
-            className="flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-medium bg-[var(--color-accent)]/10 text-[var(--color-accent)] hover:bg-[var(--color-accent)]/20 transition-colors"
+            className="flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-medium bg-[var(--color-accent)]/12 text-[var(--color-accent-text)] hover:bg-[var(--color-accent)]/20 transition-colors"
           >
             {activeTag}
             <X className="size-3" />
@@ -289,7 +304,7 @@ export default function App() {
               </button>
             </div>
           ) : (
-            <Empty />
+            <Empty doneToday={doneToday} />
           )
         ) : (
           <div className="space-y-6">
@@ -409,15 +424,20 @@ export default function App() {
   );
 }
 
-function Empty() {
+function Empty({ doneToday }: { doneToday: number }) {
+  const cleared = doneToday > 0;
   return (
     <div className="grid place-items-center py-24 text-center">
       <div className="brand-mark mb-4 grid size-12 place-items-center rounded-2xl text-white opacity-90">
         <Check className="size-6" strokeWidth={3} />
       </div>
-      <p className="font-display text-base font-semibold">All clear</p>
+      <p className="font-display text-base font-semibold">
+        {cleared ? "Inbox zero 🎉" : "All clear"}
+      </p>
       <p className="mt-1 text-xs text-[var(--color-text-faint)]">
-        Nothing on your plate. Add a task to get going.
+        {cleared
+          ? `You finished ${doneToday} ${doneToday === 1 ? "task" : "tasks"} today. Enjoy the breathing room.`
+          : "Nothing on your plate. Add a task to get going."}
       </p>
     </div>
   );

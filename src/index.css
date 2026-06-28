@@ -18,12 +18,15 @@
   --color-border-strong: #474858;
   --color-text: #f1f2f6;
   --color-text-dim: #b8b9c5;
-  --color-text-faint: #888a98;
+  --color-text-faint: #92949f;
 
-  /* Signature accent + gradient */
-  --color-accent: #7c6cff;
+  /* Signature accent + gradient. `accent` is dark enough for white text to pass
+     WCAG AA on buttons; `accent-text` is a lighter tint for accent-colored text
+     on dark/tinted backgrounds (tags, links) so small text stays legible. */
+  --color-accent: #6f5ef2;
   --color-accent-2: #4f9bff;
-  --color-accent-soft: #7c6cff22;
+  --color-accent-soft: #6f5ef222;
+  --color-accent-text: #a89dff;
   --color-accent-fg: #ffffff;
   --color-danger: #f04444;
 
@@ -54,9 +57,10 @@
   --color-border-strong: #d6d6de;
   --color-text: #15151b;
   --color-text-dim: #5c5d68;
-  --color-text-faint: #9a9ba6;
+  --color-text-faint: #6e6f7a;
   --color-accent: #5b50f0;
   --color-accent-2: #2f7fff;
+  --color-accent-text: #5b50f0;
 }
 
 * {
