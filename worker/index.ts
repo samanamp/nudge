@@ -54,6 +54,22 @@ interface PushItem {
   scheduled?: PushReminder[];
 }
 
+/** Full habit / log records (stored verbatim; the client owns the shape). */
+interface StoredHabit {
+  id: string;
+  title: string;
+  archivedAt?: number;
+  deletedAt?: number;
+  updatedAt: number;
+}
+interface StoredHabitLog {
+  id: string;
+  habitId: string;
+  date: string;
+  deletedAt?: number;
+  updatedAt: number;
+}
+
 const json = (data: unknown, init?: ResponseInit) =>
   new Response(JSON.stringify(data), {
     ...init,
@@ -275,6 +291,36 @@ async function route(req: Request, env: Env, url: URL, ctx: ExecutionContext): P
     return json({ todos });
   }
 
+  // ── Habits (§4.10) ──────────────────────────────────────────────────
+  if (p === "/api/habits/push" && method === "POST") {
+    const { habits, logs, timezone } = await req.json<{
+      habits?: StoredHabit[];
+      logs?: StoredHabitLog[];
+      timezone?: string;
+    }>();
+    if (timezone) {
+      await env.DB.prepare("UPDATE users SET timezone = ? WHERE id = ?").bind(timezone, userId).run();
+    }
+    await pushHabits(env, userId, habits ?? [], logs ?? []);
+    ctx.waitUntil(backupToGitHub(env).catch((e) => console.error("backup error:", e)));
+    return json({ ok: true, habits: habits?.length ?? 0, logs: logs?.length ?? 0 });
+  }
+
+  if (p === "/api/habits" && method === "GET") {
+    const [hRows, lRows] = await Promise.all([
+      env.DB.prepare("SELECT data FROM habits WHERE user_id = ? AND deleted_at IS NULL")
+        .bind(userId)
+        .all<{ data: string }>(),
+      env.DB.prepare("SELECT data FROM habit_logs WHERE user_id = ? AND deleted_at IS NULL")
+        .bind(userId)
+        .all<{ data: string }>(),
+    ]);
+    return json({
+      habits: (hRows.results ?? []).map((r) => JSON.parse(r.data)),
+      logs: (lRows.results ?? []).map((r) => JSON.parse(r.data)),
+    });
+  }
+
   return json({ error: "not found" }, { status: 404 });
 }
 
@@ -377,5 +423,41 @@ async function pushTodos(
         )
         .run();
     }
+  }
+}
+
+/** One-way upsert for habits + their logs (last-write-wins on updatedAt). */
+async function pushHabits(
+  env: Env,
+  userId: string,
+  habits: StoredHabit[],
+  logs: StoredHabitLog[],
+): Promise<void> {
+  for (const h of habits) {
+    if (!h?.id) continue;
+    await env.DB.prepare(
+      `INSERT INTO habits (id, user_id, data, archived_at, deleted_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET
+         data = excluded.data, archived_at = excluded.archived_at,
+         deleted_at = excluded.deleted_at, updated_at = excluded.updated_at
+       WHERE excluded.updated_at >= habits.updated_at`,
+    )
+      .bind(h.id, userId, JSON.stringify(h), h.archivedAt ?? null, h.deletedAt ?? null, h.updatedAt)
+      .run();
+  }
+
+  for (const l of logs) {
+    if (!l?.id) continue;
+    await env.DB.prepare(
+      `INSERT INTO habit_logs (id, habit_id, user_id, data, date, deleted_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET
+         data = excluded.data, date = excluded.date,
+         deleted_at = excluded.deleted_at, updated_at = excluded.updated_at
+       WHERE excluded.updated_at >= habit_logs.updated_at`,
+    )
+      .bind(l.id, l.habitId, userId, JSON.stringify(l), l.date, l.deletedAt ?? null, l.updatedAt)
+      .run();
   }
 }

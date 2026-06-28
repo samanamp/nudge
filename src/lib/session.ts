@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Todo } from "./types";
+import type { Todo, Habit, HabitLog } from "./types";
 import { api } from "./api";
 import { db, clearAllTodos, mergeServerTodos } from "./db";
+import { mergeServerHabits, mergeServerHabitLogs } from "./habits";
 
 export type AuthStatus = "loading" | "in" | "out";
 
@@ -99,8 +100,10 @@ export function usePullOnLogin(
     if (!navigator.onLine) return;
     setSyncing(true);
     try {
-      const todos = await api.getTodos();
+      const [todos, habits] = await Promise.all([api.getTodos(), api.getHabits()]);
       await mergeServerTodos(todos);
+      await mergeServerHabits(habits.habits);
+      await mergeServerHabitLogs(habits.logs);
     } catch {
       // network failure — leave local state intact
     } finally {
@@ -175,4 +178,38 @@ export function usePushSync(todos: Todo[], enabled: boolean): { lastSyncedAt: nu
   }, [todos, enabled]);
 
   return { lastSyncedAt };
+}
+
+/**
+ * Debounced one-way push of habits + their logs (mirrors usePushSync). Sends
+ * the full local arrays so a later pull is loss-less; server upserts newer-wins.
+ */
+export function usePushHabits(
+  habits: Habit[],
+  logs: HabitLog[],
+  enabled: boolean,
+): void {
+  const timer = useRef<number | undefined>(undefined);
+  const lastSig = useRef("");
+
+  useEffect(() => {
+    if (!enabled || !navigator.onLine) return;
+    const sig = JSON.stringify([
+      habits.map((h) => [h.id, h.updatedAt]),
+      logs.map((l) => [l.id, l.updatedAt]),
+    ]);
+    if (sig === lastSig.current) return;
+
+    window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => {
+      api
+        .pushHabits(habits, logs)
+        .then(() => {
+          lastSig.current = sig;
+        })
+        .catch(() => {});
+    }, 1500);
+
+    return () => window.clearTimeout(timer.current);
+  }, [habits, logs, enabled]);
 }

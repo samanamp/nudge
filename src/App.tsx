@@ -2,10 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { Check, Moon, Sun, Command as CommandIcon, RefreshCw, X } from "lucide-react";
 import { db, normalizeTodo, purgeOldCompleted, toggleComplete, updateTodo } from "@/lib/db";
-import type { Todo } from "@/lib/types";
+import { normalizeHabit } from "@/lib/habits";
+import type { Todo, Habit, HabitLog } from "@/lib/types";
 import { groupTodos } from "@/lib/grouping";
 import { useTheme } from "@/lib/useTheme";
-import { useSession, usePushSync, usePullOnLogin, useOnlineStatus } from "@/lib/session";
+import { useSession, usePushSync, usePushHabits, usePullOnLogin, useOnlineStatus } from "@/lib/session";
 import { useInAppReminders } from "@/lib/notify";
 import { QuickAdd } from "@/components/QuickAdd";
 import { TodoRow } from "@/components/TodoRow";
@@ -45,8 +46,16 @@ export default function App() {
     [] as Todo[],
   );
 
+  const habits = useLiveQuery(
+    () => db.habits.toArray().then((hs) => hs.map(normalizeHabit)),
+    [],
+    [] as Habit[],
+  );
+  const habitLogs = useLiveQuery(() => db.habitLogs.toArray(), [], [] as HabitLog[]);
+
   const { syncing, syncNow } = usePullOnLogin(session.status, session.email);
   const { lastSyncedAt } = usePushSync(todos, session.status === "in");
+  usePushHabits(habits, habitLogs, session.status === "in");
   useInAppReminders(todos);
 
   useEffect(() => {
