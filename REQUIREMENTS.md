@@ -377,12 +377,12 @@ Resolved:
 - **v4** — Web push (VAPID, fires with app closed)
 - **v5** — AI auto-tagging (Workers AI, filtered to 10 valid categories); tag filter UI
 - **v6** — Google Calendar sync (OAuth, event upsert/delete, 06:00 daily agenda block)
-
-### Up next
 - **v7 — Habits** (§4.10): habit entity + completion log; fixed-weekday &
   flexible-target schedules; binary & measured tracking; per-habit alerting
   (reuses cron/push); streaks + heatmap + cross-habit weekly/monthly review;
   today's-habits strip atop the main list; backup + sync coverage
+
+### Up next
 - **Snooze** — snooze a reminder (+10 min, +1 hour) from the notification
 - **Smart date parsing** — infer due date from natural-language titles
 - **Two-way calendar sync** — detect changes made in Google Calendar
