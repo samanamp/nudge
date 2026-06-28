@@ -16,7 +16,7 @@ export default defineConfig({
       // onNeedRefresh fires; we then auto-apply the update).
       registerType: "prompt",
       injectRegister: false,
-      includeAssets: ["favicon.svg"],
+      includeAssets: ["favicon.svg", "apple-touch-icon.png"],
       injectManifest: {
         // Keep the generated SW small — only precache the shell assets.
         globPatterns: ["**/*.{js,css,html,svg,ico,woff2}"],
@@ -25,17 +25,15 @@ export default defineConfig({
         name: "Nudge",
         short_name: "Nudge",
         description: "Offline-first todos that nudge until they're done",
-        theme_color: "#0b0b0f",
-        background_color: "#0b0b0f",
+        theme_color: "#0b0b11",
+        background_color: "#0b0b11",
         display: "standalone",
         start_url: "/",
         icons: [
-          {
-            src: "favicon.svg",
-            sizes: "any",
-            type: "image/svg+xml",
-            purpose: "any maskable",
-          },
+          { src: "favicon.svg", sizes: "any", type: "image/svg+xml", purpose: "any" },
+          { src: "icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
+          { src: "icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
+          { src: "icon-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
         ],
       },
     }),
