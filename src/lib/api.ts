@@ -1,4 +1,4 @@
-import type { Todo } from "./types";
+import type { Todo, Habit, HabitLog } from "./types";
 import { scheduleReminders } from "./reminderSchedule";
 
 /**
@@ -52,6 +52,21 @@ export const api = {
       method: "POST",
       body: JSON.stringify({
         todos: todos.map((t) => ({ todo: t, scheduled: scheduleReminders(t) })),
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      }),
+    }),
+
+  /** Pull all of the signed-in user's habits + logs. */
+  getHabits: () =>
+    req<{ habits: Habit[]; logs: HabitLog[] }>("/api/habits"),
+
+  /** One-way upsert of habits + logs (last-write-wins on updatedAt). */
+  pushHabits: (habits: Habit[], logs: HabitLog[]) =>
+    req<{ ok: true; habits: number; logs: number }>("/api/habits/push", {
+      method: "POST",
+      body: JSON.stringify({
+        habits,
+        logs,
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       }),
     }),

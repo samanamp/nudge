@@ -1,18 +1,27 @@
 import Dexie, { type Table } from "dexie";
 import { nanoid } from "nanoid";
-import type { Todo } from "./types";
+import type { Todo, Habit, HabitLog } from "./types";
 import { noRecurrence } from "./types";
 import { nextOccurrence } from "./recurrence";
 
 /** IndexedDB store. The local source of truth — fully usable offline. */
 class TodoDB extends Dexie {
   todos!: Table<Todo, string>;
+  habits!: Table<Habit, string>;
+  habitLogs!: Table<HabitLog, string>;
 
   constructor() {
     super("todos");
     this.version(1).stores({
       // Indexes used for querying/sorting; `deletedAt` for future sync filters.
       todos: "id, completedAt, dueAt, sortOrder, deletedAt, updatedAt",
+    });
+    // v2: habits (§4.10). `[habitId+date]` keeps one log per habit per day and
+    // makes "logs for a habit" / "log for a day" fast lookups.
+    this.version(2).stores({
+      todos: "id, completedAt, dueAt, sortOrder, deletedAt, updatedAt",
+      habits: "id, sortOrder, archivedAt, deletedAt, updatedAt",
+      habitLogs: "id, habitId, date, [habitId+date], deletedAt, updatedAt",
     });
   }
 }

@@ -96,25 +96,40 @@ export async function backupToGitHub(env: Env): Promise<void> {
     ...JSON.parse(r.data),
   }));
 
+  const [habitRows, logRows] = await Promise.all([
+    env.DB.prepare("SELECT data FROM habits").all<{ data: string }>(),
+    env.DB.prepare("SELECT data FROM habit_logs").all<{ data: string }>(),
+  ]);
+  const habits = (habitRows.results ?? []).map((r) => JSON.parse(r.data));
+  const habitLogs = (logRows.results ?? []).map((r) => JSON.parse(r.data));
+
   const exportedAt = new Date().toISOString();
-  const msg = `backup: ${todos.length} todos @ ${exportedAt}`;
+  const msg = `backup: ${todos.length} todos, ${habits.length} habits @ ${exportedAt}`;
 
   const todosJson = JSON.stringify(
-    { schemaVersion: 1, exportedAt, count: todos.length, todos },
+    { schemaVersion: 2, exportedAt, count: todos.length, todos },
     null,
     2,
   );
   const metaJson = JSON.stringify(
-    { schemaVersion: 1, exportedAt, count: todos.length },
+    {
+      schemaVersion: 2,
+      exportedAt,
+      counts: { todos: todos.length, habits: habits.length, habitLogs: habitLogs.length },
+    },
     null,
     2,
   );
   const tasksMd = buildTasksMd(todos, exportedAt);
+  const habitsJson = JSON.stringify({ schemaVersion: 2, exportedAt, habits }, null, 2);
+  const habitLogsJson = JSON.stringify({ schemaVersion: 2, exportedAt, logs: habitLogs }, null, 2);
 
   // Sequential to avoid parallel SHA-fetch race.
   await ghPut(env.GITHUB_BACKUP_PAT, "data/todos.json", todosJson, msg);
+  await ghPut(env.GITHUB_BACKUP_PAT, "data/habits.json", habitsJson, msg);
+  await ghPut(env.GITHUB_BACKUP_PAT, "data/habit_logs.json", habitLogsJson, msg);
   await ghPut(env.GITHUB_BACKUP_PAT, "data/meta.json", metaJson, msg);
   await ghPut(env.GITHUB_BACKUP_PAT, "TASKS.md", tasksMd, msg);
 
-  console.log(`backup ok: ${todos.length} todos → ${REPO}`);
+  console.log(`backup ok: ${todos.length} todos, ${habits.length} habits → ${REPO}`);
 }
