@@ -8,15 +8,17 @@ import { guessEmoji } from "@/lib/emoji";
 interface Props {
   /** Omit for create mode. */
   habit?: Habit;
+  /** Prefill the title in create mode (e.g. from a quick-start chip). */
+  initialTitle?: string;
   onClose: () => void;
   onDeleted?: (id: string) => void;
 }
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-export function HabitEditDialog({ habit, onClose, onDeleted }: Props) {
+export function HabitEditDialog({ habit, initialTitle, onClose, onDeleted }: Props) {
   const creating = !habit;
-  const [title, setTitle] = useState(habit?.title ?? "");
+  const [title, setTitle] = useState(habit?.title ?? initialTitle ?? "");
   const [icon, setIcon] = useState(habit?.icon ?? "");
   const [notes, setNotes] = useState(habit?.notes ?? "");
 
@@ -150,21 +152,46 @@ export function HabitEditDialog({ habit, onClose, onDeleted }: Props) {
           </Field>
 
           {model === "fixed_weekdays" ? (
-            <div className="flex gap-1">
-              {WEEKDAYS.map((d, i) => (
-                <button
-                  key={d}
-                  onClick={() => toggleWeekday(i)}
-                  className={cn(
-                    "h-8 flex-1 rounded-md border text-[11px] transition-colors",
-                    weekdays.includes(i)
-                      ? "border-[var(--color-accent)] bg-[var(--color-accent)] text-[var(--color-accent-fg)]"
-                      : "border-[var(--color-border)] text-[var(--color-text-dim)] hover:border-[var(--color-border-strong)]",
-                  )}
-                >
-                  {d[0]}
-                </button>
-              ))}
+            <div className="space-y-2">
+              <div className="flex flex-wrap gap-1.5">
+                {([
+                  ["Every day", [0, 1, 2, 3, 4, 5, 6]],
+                  ["Weekdays", [1, 2, 3, 4, 5]],
+                  ["Weekends", [0, 6]],
+                ] as const).map(([label, days]) => {
+                  const activePreset = weekdays.length === days.length && days.every((d) => weekdays.includes(d));
+                  return (
+                    <button
+                      key={label}
+                      onClick={() => setWeekdays([...days])}
+                      className={cn(
+                        "rounded-full px-2.5 py-0.5 text-[11px] font-medium transition-colors",
+                        activePreset
+                          ? "bg-[var(--color-accent)]/15 text-[var(--color-accent)]"
+                          : "bg-[var(--color-surface-2)] text-[var(--color-text-dim)] hover:text-[var(--color-text)]",
+                      )}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="flex gap-1">
+                {WEEKDAYS.map((d, i) => (
+                  <button
+                    key={d}
+                    onClick={() => toggleWeekday(i)}
+                    className={cn(
+                      "h-9 flex-1 rounded-md border text-[11px] font-medium transition-colors",
+                      weekdays.includes(i)
+                        ? "border-[var(--color-accent)] bg-[var(--color-accent)] text-[var(--color-accent-fg)]"
+                        : "border-[var(--color-border)] text-[var(--color-text-dim)] hover:border-[var(--color-border-strong)]",
+                    )}
+                  >
+                    {d[0]}
+                  </button>
+                ))}
+              </div>
             </div>
           ) : (
             <Field label="Target">
@@ -222,12 +249,12 @@ export function HabitEditDialog({ habit, onClose, onDeleted }: Props) {
           {/* Alerting */}
           <Field label="Remind">
             <input type="time" value={timeOfDay} onChange={(e) => setTimeOfDay(e.target.value)} className="control" />
-            <label className="flex items-center gap-1.5 text-xs text-[var(--color-text-dim)]">
-              <input type="checkbox" checked={channels.includes("push")} onChange={() => toggleChannel("push")} />
+            <label className="flex cursor-pointer items-center gap-1.5 text-xs text-[var(--color-text-dim)]">
+              <input type="checkbox" className="size-3.5 accent-[var(--color-accent)]" checked={channels.includes("push")} onChange={() => toggleChannel("push")} />
               push
             </label>
-            <label className="flex items-center gap-1.5 text-xs text-[var(--color-text-dim)]">
-              <input type="checkbox" checked={channels.includes("email")} onChange={() => toggleChannel("email")} />
+            <label className="flex cursor-pointer items-center gap-1.5 text-xs text-[var(--color-text-dim)]">
+              <input type="checkbox" className="size-3.5 accent-[var(--color-accent)]" checked={channels.includes("email")} onChange={() => toggleChannel("email")} />
               email
             </label>
           </Field>
@@ -340,8 +367,13 @@ function Seg({
 
 function Check2({ checked, onChange, children }: { checked: boolean; onChange: (v: boolean) => void; children: React.ReactNode }) {
   return (
-    <label className="flex items-center gap-2 text-xs text-[var(--color-text-dim)]">
-      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+    <label className="flex cursor-pointer items-center gap-2 text-xs text-[var(--color-text-dim)]">
+      <input
+        type="checkbox"
+        className="size-3.5 accent-[var(--color-accent)]"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+      />
       {children}
     </label>
   );

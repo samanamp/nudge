@@ -13,7 +13,13 @@ import { HabitEditDialog } from "./HabitEditDialog";
 export function HabitsView() {
   const [editing, setEditing] = useState<Habit | null>(null);
   const [creating, setCreating] = useState(false);
+  const [seedTitle, setSeedTitle] = useState<string | undefined>(undefined);
   const [showArchived, setShowArchived] = useState(false);
+
+  const openCreate = (title?: string) => {
+    setSeedTitle(title);
+    setCreating(true);
+  };
 
   const habits = useLiveQuery(
     () => db.habits.filter((h) => !h.deletedAt).toArray().then((hs) => hs.map(normalizeHabit)),
@@ -44,15 +50,18 @@ export function HabitsView() {
     const today = dayKey();
     let dueOrDone = 0;
     let doneToday = 0;
-    let onTrack = 0;
+    let weekDone = 0;
+    let weekTarget = 0;
     for (const h of active) {
       const logs = indexLogs(logsByHabit.get(h.id) ?? []);
       const isDone = dayStatus(h, today, logs) === "done";
       if (isDone || isDueToday(h, logsByHabit.get(h.id) ?? [])) dueOrDone++;
       if (isDone) doneToday++;
-      if (periodProgress(h, logs).met) onTrack++;
+      const p = periodProgress(h, logs);
+      weekDone += p.done;
+      weekTarget += p.target;
     }
-    return { dueOrDone, doneToday, onTrack, count: active.length };
+    return { dueOrDone, doneToday, weekDone, weekTarget, count: active.length };
   }, [active, logsByHabit]);
 
   const allTodayDone = review.dueOrDone > 0 && review.doneToday >= review.dueOrDone;
@@ -78,12 +87,12 @@ export function HabitsView() {
                     : `${review.doneToday} of ${review.dueOrDone} done today`}
                 </p>
                 <p className="mt-0.5 text-[11px] text-[var(--color-text-faint)]">
-                  {review.onTrack}/{review.count} on track this week
+                  {review.weekDone} of {review.weekTarget} sessions this week
                 </p>
               </div>
             </div>
             <button
-              onClick={() => setCreating(true)}
+              onClick={() => openCreate()}
               className="flex items-center gap-1.5 rounded-lg bg-[var(--color-accent)] px-3 py-2 text-xs font-medium text-[var(--color-accent-fg)] shadow-[0_2px_10px_-2px_var(--color-accent-soft)] transition-transform active:scale-95"
             >
               <Plus className="size-3.5" /> Habit
@@ -102,15 +111,34 @@ export function HabitsView() {
       )}
 
       {active.length === 0 ? (
-        <div className="grid place-items-center py-20 text-center">
-          <p className="font-display text-base font-semibold">Build a habit</p>
-          <p className="mt-1 max-w-xs text-xs text-[var(--color-text-faint)]">
+        <div className="grid place-items-center py-16 text-center">
+          <div className="grid size-14 place-items-center rounded-2xl bg-[var(--color-accent)]/12 text-3xl">
+            🌱
+          </div>
+          <p className="mt-4 font-display text-lg font-semibold">Build a habit</p>
+          <p className="mt-1 max-w-xs text-[13px] text-[var(--color-text-dim)]">
             Track practices like yoga, meditation, or violin. Log each day and watch
             your streaks grow.
           </p>
+          <div className="mt-5 flex flex-wrap justify-center gap-2">
+            {[
+              ["🧘", "Meditation"],
+              ["🏃", "Run"],
+              ["📚", "Read"],
+              ["🎻", "Violin"],
+            ].map(([icon, title]) => (
+              <button
+                key={title}
+                onClick={() => openCreate(title)}
+                className="flex items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-xs font-medium text-[var(--color-text-dim)] transition-colors hover:border-[var(--color-accent)] hover:text-[var(--color-text)]"
+              >
+                <span>{icon}</span> {title}
+              </button>
+            ))}
+          </div>
           <button
-            onClick={() => setCreating(true)}
-            className="mt-4 flex items-center gap-1.5 rounded-lg bg-[var(--color-accent)] px-3.5 py-2 text-xs font-medium text-[var(--color-accent-fg)]"
+            onClick={() => openCreate()}
+            className="mt-5 flex items-center gap-1.5 rounded-lg bg-[var(--color-accent)] px-4 py-2 text-xs font-medium text-[var(--color-accent-fg)] shadow-[0_2px_10px_-2px_var(--color-accent-soft)]"
           >
             <Plus className="size-3.5" /> New habit
           </button>
@@ -149,9 +177,11 @@ export function HabitsView() {
       {(creating || editing) && (
         <HabitEditDialog
           habit={editing ?? undefined}
+          initialTitle={seedTitle}
           onClose={() => {
             setEditing(null);
             setCreating(false);
+            setSeedTitle(undefined);
           }}
         />
       )}
