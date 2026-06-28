@@ -9,15 +9,16 @@
   --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", monospace;
 
   /* Monochrome surface ramp (dark by default) — slightly cool/desaturated.
-     Surfaces are lifted off the bg so cards read as distinct panels. */
-  --color-bg: #08080c;
-  --color-surface: #17171f;
-  --color-surface-2: #212230;
-  --color-border: #2c2d3a;
-  --color-border-strong: #40414f;
-  --color-text: #eef0f4;
-  --color-text-dim: #a3a4b2;
-  --color-text-faint: #6d6f7a;
+     Surfaces are lifted off the bg so cards read as distinct panels, and the
+     dim/faint text tiers are kept bright enough to stay legible. */
+  --color-bg: #0b0b11;
+  --color-surface: #191921;
+  --color-surface-2: #242533;
+  --color-border: #313240;
+  --color-border-strong: #474858;
+  --color-text: #f1f2f6;
+  --color-text-dim: #b8b9c5;
+  --color-text-faint: #888a98;
 
   /* Signature accent + gradient */
   --color-accent: #7c6cff;
@@ -62,8 +63,10 @@
   border-color: var(--color-border);
 }
 
-/* Visible focus ring for keyboard users (not on mouse clicks). */
-:where(button, a, input, select, textarea, [role="button"], [tabindex]):focus-visible {
+/* Visible focus ring for keyboard users (not on mouse clicks). Inputs are
+   excluded — they have their own focus styling (accent border / ring), and a
+   box outline looks wrong on underline-style fields. */
+:where(button, a, [role="button"], [tabindex]):focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
   border-radius: 6px;
