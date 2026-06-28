@@ -2,23 +2,24 @@
 
 > It nudges until it's done.
 
-Offline-first, local-first todo app. Crisp & dense (Linear-style) UI, works on
-mobile and desktop, installable as a PWA. Live at **[nudge.edge.bond](https://nudge.edge.bond)**.
+Offline-first, local-first **todo + habit** app. Crisp & dense (Linear-style) UI,
+works on mobile and desktop, installable as a PWA. Live at **[nudge.edge.bond](https://nudge.edge.bond)**.
 
 ## Features
 
 - **Offline-first** — full functionality with no internet; syncs automatically when back online
-- **Multi-device sync** — same todos on every signed-in device
+- **Multi-device sync** — same todos + habits on every signed-in device
 - **Recurring todos** — daily, weekly (specific weekdays), monthly, yearly, every N units
 - **Reminders** — one-shot offsets ("1 hour before") and recurring nags ("every day until done"); delivered via **email** and **web push** (fires even when the app is closed)
-- **AI auto-tagging** — Workers AI suggests up to 3 tags (errand, health, finance, work, home, shopping, personal, travel, family, fitness) on task create/edit
+- **Habit tracking** — recurring practices (yoga, meditation, violin) with streaks, a GitHub-style heatmap, completion %, and cross-habit weekly review. Fixed-day or N×/period schedules; done/not or measured (e.g. minutes). Per-habit nudges via the same email/push pipeline
+- **AI auto-tagging + emoji** — Workers AI suggests up to 3 tags on tasks, and an emoji for new habits
 - **Tag filter** — click any tag pill to filter; header updates count
 - **Google Calendar sync** — todos with due dates appear as calendar events; daily agenda block at 06:00
-- **Git backup** — full snapshot pushed to a private GitHub repo after every sync + daily cron
+- **Git backup** — full snapshot (todos + habits + logs) pushed to a private GitHub repo after every sync + daily cron
 - **Password or magic link** — sign in with a password or request a one-click email link
-- **Dark/light theme** — dark by default; toggle in header
+- **Themes** — Midnight (default), Daylight, Homebrew (terminal), Amber CRT, Dracula — picker in the header
 - **Command palette** — `⌘K` for everything
-- **Keyboard nav** — `↑/↓`, `⏎`, `X`, `N` on desktop
+- **Keyboard nav** — `↑/↓`, `⏎`, `X`, `N` on desktop; satisfying completion animation
 
 ## Dev setup
 
