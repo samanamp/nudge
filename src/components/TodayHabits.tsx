@@ -58,8 +58,13 @@ export function TodayHabits({ onOpenHabits }: { onOpenHabits: () => void }) {
         {items.map(({ habit, done }) => (
           <button
             key={habit.id}
-            onClick={() => toggleDone(habit.id, today, habit.targetAmount)}
-            title={done ? "Logged — tap to undo" : "Mark done today"}
+            // Only log from here; clearing/editing lives on the habit card to
+            // avoid accidentally un-logging with a stray tap.
+            onClick={() => {
+              if (!done) toggleDone(habit.id, today, habit.targetAmount);
+              else onOpenHabits();
+            }}
+            title={done ? "Logged — manage on the Habits tab" : "Mark done today"}
             className={cn(
               "flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors",
               done

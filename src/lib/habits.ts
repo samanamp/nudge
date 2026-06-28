@@ -1,6 +1,7 @@
 import { format } from "date-fns";
 import { nanoid } from "nanoid";
 import { db } from "./db";
+import { matchEmoji } from "./emoji";
 import type { Habit, HabitLog, HabitLogState } from "./types";
 
 const now = () => Date.now();
@@ -50,7 +51,9 @@ export async function createHabit(
     id: nanoid(),
     title: input.title.trim(),
     notes: input.notes,
-    icon: input.icon,
+    // Curated emoji for known habits (distinct + reliable); unknowns stay blank
+    // so the server's AI can suggest one.
+    icon: input.icon ?? (matchEmoji(input.title.trim()) || undefined),
     scheduleModel: input.scheduleModel ?? "fixed_weekdays",
     weekdays: input.weekdays ?? (input.scheduleModel === "flexible" ? undefined : [0, 1, 2, 3, 4, 5, 6]),
     period: input.period,

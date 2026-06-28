@@ -47,6 +47,10 @@ export async function suggestTags(
  * map so a habit always gets a sensible emoji.
  */
 export async function suggestEmoji(ai: Ai, title: string, notes?: string): Promise<string> {
+  // Curated map first — distinct + reliable for common habits. The small model
+  // tends to return the same generic emoji (e.g. 🧘 for both yoga & meditation).
+  const curated = fallbackEmoji(title);
+  if (curated) return curated;
   try {
     const result = (await ai.run("@cf/meta/llama-3.2-1b-instruct", {
       messages: [
@@ -66,10 +70,10 @@ export async function suggestEmoji(ai: Ai, title: string, notes?: string): Promi
   } catch (e) {
     console.warn("AI emoji suggestion failed:", e);
   }
-  return fallbackEmoji(title);
+  return "✨";
 }
 
-/** Keyword → emoji fallback (kept in sync with src/lib/emoji.ts). */
+/** Keyword → emoji match (kept in sync with src/lib/emoji.ts). "" if no match. */
 function fallbackEmoji(title: string): string {
   const M: [RegExp, string][] = [
     [/\byoga\b/i, "🧘‍♀️"], [/medit|mindful|breath/i, "🧘"], [/violin/i, "🎻"],
@@ -85,5 +89,5 @@ function fallbackEmoji(title: string): string {
     [/grateful|gratitude/i, "🙏"], [/smoke|quit|nicotine/i, "🚭"], [/focus|deep work|productiv/i, "🎯"],
   ];
   for (const [re, e] of M) if (re.test(title)) return e;
-  return "✨";
+  return "";
 }

@@ -3,7 +3,7 @@ import { Flame, Pencil, TrendingUp, TrendingDown, Minus, Check } from "lucide-re
 import type { Habit, HabitLog } from "@/lib/types";
 import { cn } from "@/lib/cn";
 import { summarize, type Trend } from "@/lib/habitStats";
-import { describeSchedule, toggleDone, logHabit, dayKey } from "@/lib/habits";
+import { describeSchedule, toggleDone, logHabit, clearLog, dayKey } from "@/lib/habits";
 import { guessEmoji } from "@/lib/emoji";
 import { HabitHeatmap } from "./HabitHeatmap";
 
@@ -27,6 +27,7 @@ export function HabitCard({ habit, logs, onEdit }: Props) {
   const measured = habit.measurement === "measured";
   const doneToday = s.todayStatus === "done";
   const [editingAmount, setEditingAmount] = useState(false);
+  const [showActions, setShowActions] = useState(false);
   const [amount, setAmount] = useState<string>(
     String(habit.targetAmount ?? s.todayLog?.amount ?? ""),
   );
@@ -36,6 +37,15 @@ export function HabitCard({ habit, logs, onEdit }: Props) {
     if (!Number.isFinite(n)) return;
     await logHabit(habit.id, { date: dayKey(), state: "done", amount: n });
     setEditingAmount(false);
+    setShowActions(false);
+  };
+
+  // Tapping the tile: log when not done; when already done, open an actions
+  // menu instead of silently clearing it (avoids accidental un-logging).
+  const handleTileClick = () => {
+    if (doneToday) setShowActions((v) => !v);
+    else if (measured) setEditingAmount((v) => !v);
+    else toggleDone(habit.id);
   };
 
   const tr = TREND[s.trend];
@@ -46,12 +56,9 @@ export function HabitCard({ habit, logs, onEdit }: Props) {
       <div className="flex items-start gap-3">
         <button
           type="button"
-          onClick={() => {
-            if (measured && !doneToday) setEditingAmount((v) => !v);
-            else toggleDone(habit.id);
-          }}
+          onClick={handleTileClick}
           aria-pressed={doneToday}
-          title={doneToday ? "Logged today — tap to undo" : "Mark done today"}
+          title={doneToday ? "Logged today — tap for options" : "Mark done today"}
           className={cn(
             "relative mt-0.5 grid size-10 shrink-0 place-items-center rounded-xl border text-xl transition-colors",
             doneToday
@@ -109,6 +116,42 @@ export function HabitCard({ habit, logs, onEdit }: Props) {
           <div className="text-[10px] text-[var(--color-text-faint)]">best {s.longest}</div>
         </div>
       </div>
+
+      {/* Actions for an already-logged day (no accidental clearing) */}
+      {showActions && doneToday && (
+        <div className="mt-2.5 flex flex-wrap items-center gap-2 text-xs">
+          <span className="text-[var(--color-text-dim)]">
+            Logged today{measured && s.todayLog?.amount != null ? ` · ${s.todayLog.amount} ${habit.unit ?? ""}` : ""}.
+          </span>
+          {measured && (
+            <button
+              onClick={() => {
+                setAmount(String(s.todayLog?.amount ?? habit.targetAmount ?? ""));
+                setEditingAmount(true);
+                setShowActions(false);
+              }}
+              className="rounded-md border border-[var(--color-border)] px-2.5 py-1 font-medium text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
+            >
+              Edit amount
+            </button>
+          )}
+          <button
+            onClick={() => {
+              clearLog(habit.id);
+              setShowActions(false);
+            }}
+            className="rounded-md border border-[var(--color-border)] px-2.5 py-1 font-medium text-[var(--color-text-dim)] hover:border-[var(--color-danger)] hover:text-[var(--color-danger)]"
+          >
+            Clear today
+          </button>
+          <button
+            onClick={() => setShowActions(false)}
+            className="rounded-md px-2 py-1 text-[var(--color-text-faint)] hover:text-[var(--color-text-dim)]"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
 
       {/* Inline measured logging */}
       {editingAmount && (
