@@ -43,7 +43,8 @@ export async function suggestTags(
 
 /**
  * Suggest a single emoji that represents a habit (e.g. "Meditation" → 🧘).
- * Returns "" if AI is unavailable or no emoji could be extracted.
+ * Tries Workers AI (few-shot for the small model), then falls back to a keyword
+ * map so a habit always gets a sensible emoji.
  */
 export async function suggestEmoji(ai: Ai, title: string, notes?: string): Promise<string> {
   try {
@@ -52,16 +53,37 @@ export async function suggestEmoji(ai: Ai, title: string, notes?: string): Promi
         {
           role: "system",
           content:
-            "You pick the single best emoji to represent a habit. Reply with ONLY one emoji character and nothing else.",
+            "You assign ONE emoji that best represents a habit. Reply with only the single emoji, nothing else. " +
+            "Examples: Meditation→🧘, Running→🏃, Read a book→📚, Drink water→💧, Violin practice→🎻, " +
+            "Workout→🏋️, Journal→✍️, Sleep early→😴, Stretch→🤸, Learn Spanish→🗣️.",
         },
-        { role: "user", content: `Habit: "${title}"${notes ? ` (${notes})` : ""}` },
+        { role: "user", content: `${title}${notes ? ` (${notes})` : ""}→` },
       ],
       max_tokens: 8,
     })) as AiTextResult;
     const match = (result.response ?? "").match(/\p{Extended_Pictographic}/u);
-    return match ? match[0] : "";
+    if (match) return match[0];
   } catch (e) {
     console.warn("AI emoji suggestion failed:", e);
-    return "";
   }
+  return fallbackEmoji(title);
+}
+
+/** Keyword → emoji fallback (kept in sync with src/lib/emoji.ts). */
+function fallbackEmoji(title: string): string {
+  const M: [RegExp, string][] = [
+    [/\byoga\b/i, "🧘‍♀️"], [/medit|mindful|breath/i, "🧘"], [/violin/i, "🎻"],
+    [/piano|keyboard/i, "🎹"], [/guitar/i, "🎸"], [/sing|vocal/i, "🎤"], [/music|instrument/i, "🎵"],
+    [/run|jog|sprint/i, "🏃"], [/walk|steps/i, "🚶"], [/gym|workout|exercise|lift|weight|strength/i, "🏋️"],
+    [/push.?up|pull.?up|\bcore\b|\babs\b/i, "💪"], [/stretch|mobility/i, "🤸"], [/bike|cycl/i, "🚴"],
+    [/swim/i, "🏊"], [/read|book/i, "📚"], [/write|journal|diary/i, "✍️"], [/study|learn|class|course/i, "📖"],
+    [/language|spanish|french|german|vocab/i, "🗣️"], [/code|program|\bdev\b/i, "💻"], [/draw|paint|sketch|art/i, "🎨"],
+    [/water|hydrate/i, "💧"], [/sleep|bed|rest/i, "😴"], [/wake|morning/i, "🌅"], [/cook|meal|recipe/i, "🍳"],
+    [/eat|diet|nutrition|veg|fruit|healthy/i, "🥗"], [/clean|tidy|chore|laundry/i, "🧹"], [/pray|church|bible|faith/i, "🙏"],
+    [/vitamin|pill|\bmed\b|supplement/i, "💊"], [/teeth|floss|brush|dental/i, "🦷"], [/skin|skincare/i, "🧴"],
+    [/garden|plant/i, "🌱"], [/\bdog\b/i, "🐕"], [/money|budget|save|finance|invest/i, "💰"],
+    [/grateful|gratitude/i, "🙏"], [/smoke|quit|nicotine/i, "🚭"], [/focus|deep work|productiv/i, "🎯"],
+  ];
+  for (const [re, e] of M) if (re.test(title)) return e;
+  return "✨";
 }

@@ -3,6 +3,7 @@ import { Trash2, X, Archive } from "lucide-react";
 import type { Habit, HabitMeasurement, HabitPeriod, HabitScheduleModel, ReminderChannel } from "@/lib/types";
 import { cn } from "@/lib/cn";
 import { createHabit, updateHabit, deleteHabit, archiveHabit } from "@/lib/habits";
+import { guessEmoji } from "@/lib/emoji";
 
 interface Props {
   /** Omit for create mode. */
@@ -115,7 +116,8 @@ export function HabitEditDialog({ habit, onClose, onDeleted }: Props) {
             <input
               value={icon}
               onChange={(e) => setIcon(e.target.value.slice(0, 2))}
-              placeholder="🧘"
+              placeholder={title ? guessEmoji(title) : "🧘"}
+              title="Leave blank to auto-pick an emoji"
               className="w-12 shrink-0 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] py-2 text-center text-lg outline-none focus:border-[var(--color-accent)]"
             />
             <input

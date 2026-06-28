@@ -12,7 +12,10 @@ export default defineConfig({
       strategies: "injectManifest",
       srcDir: "src",
       filename: "sw.ts",
-      registerType: "autoUpdate",
+      // We register + drive updates ourselves in src/lib/pwa.ts (prompt mode so
+      // onNeedRefresh fires; we then auto-apply the update).
+      registerType: "prompt",
+      injectRegister: false,
       includeAssets: ["favicon.svg"],
       injectManifest: {
         // Keep the generated SW small — only precache the shell assets.

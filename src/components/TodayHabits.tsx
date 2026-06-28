@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { normalizeHabit, toggleDone, dayKey } from "@/lib/habits";
 import type { Habit, HabitLog } from "@/lib/types";
 import { indexLogs, dayStatus, isDueToday } from "@/lib/habitStats";
+import { guessEmoji } from "@/lib/emoji";
 import { cn } from "@/lib/cn";
 
 /**
@@ -74,7 +75,7 @@ export function TodayHabits({ onOpenHabits }: { onOpenHabits: () => void }) {
             >
               {done && <Check className="size-2.5" strokeWidth={3.5} />}
             </span>
-            {habit.icon && <span>{habit.icon}</span>}
+            <span>{habit.icon || guessEmoji(habit.title)}</span>
             {habit.title}
           </button>
         ))}
