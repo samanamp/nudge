@@ -4,6 +4,7 @@ import type { Habit, HabitLog } from "@/lib/types";
 import { cn } from "@/lib/cn";
 import { summarize, type Trend } from "@/lib/habitStats";
 import { describeSchedule, toggleDone, logHabit, dayKey } from "@/lib/habits";
+import { guessEmoji } from "@/lib/emoji";
 import { HabitHeatmap } from "./HabitHeatmap";
 
 interface Props {
@@ -52,13 +53,18 @@ export function HabitCard({ habit, logs, onEdit }: Props) {
           aria-pressed={doneToday}
           title={doneToday ? "Logged today — tap to undo" : "Mark done today"}
           className={cn(
-            "mt-0.5 grid size-9 shrink-0 place-items-center rounded-lg border text-lg transition-colors",
+            "relative mt-0.5 grid size-10 shrink-0 place-items-center rounded-xl border text-xl transition-colors",
             doneToday
-              ? "border-[var(--color-accent)] bg-[var(--color-accent)] text-[var(--color-accent-fg)]"
+              ? "border-[var(--color-accent)] bg-[var(--color-accent)]/12"
               : "border-[var(--color-border-strong)] hover:border-[var(--color-accent)]",
           )}
         >
-          {doneToday ? <Check className="size-5" strokeWidth={3} /> : (habit.icon ?? "·")}
+          <span>{habit.icon || guessEmoji(habit.title)}</span>
+          {doneToday && (
+            <span className="absolute -bottom-1 -right-1 grid size-4 place-items-center rounded-full bg-[var(--color-accent)] ring-2 ring-[var(--color-surface)]">
+              <Check className="size-2.5 text-[var(--color-accent-fg)]" strokeWidth={3.5} />
+            </span>
+          )}
         </button>
 
         <div className="min-w-0 flex-1">

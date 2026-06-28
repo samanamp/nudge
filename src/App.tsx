@@ -7,6 +7,7 @@ import type { Todo, Habit, HabitLog } from "@/lib/types";
 import { groupTodos } from "@/lib/grouping";
 import { useTheme } from "@/lib/useTheme";
 import { useSession, usePushSync, usePushHabits, usePullOnLogin, useOnlineStatus } from "@/lib/session";
+import { checkForUpdate } from "@/lib/pwa";
 import { useInAppReminders } from "@/lib/notify";
 import { QuickAdd } from "@/components/QuickAdd";
 import { TodoRow } from "@/components/TodoRow";
@@ -203,8 +204,11 @@ export default function App() {
         </div>
         <div className="flex items-center gap-1">
           <button
-            onClick={syncNow}
-            title="Sync now"
+            onClick={() => {
+              checkForUpdate(); // also pull in any new app build
+              syncNow();
+            }}
+            title="Sync now (also checks for app updates)"
             disabled={syncing}
             className="rounded-lg p-2 text-[var(--color-text-dim)] transition-colors hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] disabled:opacity-40"
           >

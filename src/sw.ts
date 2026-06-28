@@ -1,4 +1,5 @@
 /// <reference lib="webworker" />
+import { clientsClaim } from "workbox-core";
 import { cleanupOutdatedCaches, precacheAndRoute } from "workbox-precaching";
 import { NavigationRoute, registerRoute } from "workbox-routing";
 import { createHandlerBoundToURL } from "workbox-precaching";
@@ -9,6 +10,16 @@ declare const self: ServiceWorkerGlobalScope & {
 
 precacheAndRoute(self.__WB_MANIFEST);
 cleanupOutdatedCaches();
+
+// Update flow: with injectManifest the SW must opt in to activating a new
+// build. The page posts SKIP_WAITING (see src/lib/pwa.ts) when it's ready to
+// swap in the new build; we then take control so a reload serves the new UI.
+// Without this, a new SW stays "waiting" and refreshes keep serving the stale
+// shell — the root cause of "refresh doesn't load the new UI".
+clientsClaim();
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "SKIP_WAITING") self.skipWaiting();
+});
 
 // SPA navigation fallback — /api/* must reach the Worker, not the cached shell.
 registerRoute(
