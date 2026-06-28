@@ -48,7 +48,7 @@
 }
 
 /* Light theme */
-:root.light {
+:root.theme-light {
   color-scheme: light;
   --color-bg: #fbfbfd;
   --color-surface: #ffffff;
@@ -61,6 +61,63 @@
   --color-accent: #5b50f0;
   --color-accent-2: #2f7fff;
   --color-accent-text: #5b50f0;
+}
+
+/* Homebrew — classic green-on-black Mac Terminal. Mono-leaning, geeky. */
+:root.theme-homebrew {
+  color-scheme: dark;
+  --color-bg: #020402;
+  --color-surface: #07120b;
+  --color-surface-2: #0d2014;
+  --color-border: #14361f;
+  --color-border-strong: #1f5230;
+  --color-text: #c8facc;
+  --color-text-dim: #6fcf8f;
+  --color-text-faint: #4f9d6a;
+  --color-accent: #1faa59;
+  --color-accent-2: #36d399;
+  --color-accent-soft: #36d39922;
+  --color-accent-text: #4ade80;
+  --color-accent-fg: #02160a;
+  --color-danger: #ff6b6b;
+}
+
+/* Amber CRT — warm phosphor terminal. Answers "too cold". */
+:root.theme-amber {
+  color-scheme: dark;
+  --color-bg: #140d02;
+  --color-surface: #1f1606;
+  --color-surface-2: #2c2009;
+  --color-border: #3d2e0f;
+  --color-border-strong: #5a451a;
+  --color-text: #ffe9c2;
+  --color-text-dim: #d6a85f;
+  --color-text-faint: #a37d3e;
+  --color-accent: #c8780a;
+  --color-accent-2: #ffb000;
+  --color-accent-soft: #ffb00022;
+  --color-accent-text: #ffc44d;
+  --color-accent-fg: #1a1000;
+  --color-danger: #ff5d5d;
+}
+
+/* Dracula — the cult developer palette. Warm-cool balance, friendly. */
+:root.theme-dracula {
+  color-scheme: dark;
+  --color-bg: #21222c;
+  --color-surface: #282a36;
+  --color-surface-2: #343746;
+  --color-border: #424458;
+  --color-border-strong: #565872;
+  --color-text: #f8f8f2;
+  --color-text-dim: #c7c9dd;
+  --color-text-faint: #9a9cb5;
+  --color-accent: #7d5fd6;
+  --color-accent-2: #ff79c6;
+  --color-accent-soft: #bd93f922;
+  --color-accent-text: #bd93f9;
+  --color-accent-fg: #ffffff;
+  --color-danger: #ff5555;
 }
 
 * {
@@ -133,6 +190,26 @@ body {
 .logo-ping-2 { animation-delay: 0.45s; }
 @media (prefers-reduced-motion: reduce) {
   .logo-ping { animation: none; opacity: 1; }
+}
+
+/* Task completion exit — a satisfying strike + glide-out, then collapse so the
+   rows below slide up smoothly. */
+@keyframes task-out {
+  0% { opacity: 1; max-height: 96px; transform: translateX(0); }
+  35% { opacity: 0.6; transform: translateX(8px); }
+  100% {
+    opacity: 0;
+    max-height: 0;
+    transform: translateX(8px);
+    padding-top: 0;
+    padding-bottom: 0;
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+}
+.animate-task-out { animation: task-out 0.42s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
+@media (prefers-reduced-motion: reduce) {
+  .animate-task-out { animation: none; opacity: 0; }
 }
 
 /* Row flash — brief accent pulse when a task is newly added */

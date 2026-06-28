@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
-import { Check, Moon, Sun, Command as CommandIcon, RefreshCw, X } from "lucide-react";
+import { Check, Command as CommandIcon, RefreshCw, X } from "lucide-react";
 import { db, normalizeTodo, purgeOldCompleted, toggleComplete, updateTodo } from "@/lib/db";
 import { normalizeHabit } from "@/lib/habits";
 import type { Todo, Habit, HabitLog } from "@/lib/types";
@@ -16,16 +16,18 @@ import { CommandPalette } from "@/components/CommandPalette";
 import { AccountMenu } from "@/components/AccountMenu";
 import { SignInScreen } from "@/components/SignInScreen";
 import { LogoGlyph } from "@/components/Logo";
+import { ThemeMenu } from "@/components/ThemeMenu";
 import { HabitsView } from "@/components/HabitsView";
 import { TodayHabits } from "@/components/TodayHabits";
 
 export default function App() {
-  const [theme, toggleTheme] = useTheme();
+  const { theme, setTheme, cycle: cycleTheme } = useTheme();
   const [view, setView] = useState<"todos" | "habits">("todos");
   const [editing, setEditing] = useState<Todo | null>(null);
   const [selected, setSelected] = useState(0);
   const [showCompleted, setShowCompleted] = useState(false);
   const [activeTag, setActiveTag] = useState<string | null>(null);
+  const [completing, setCompleting] = useState<Set<string>>(() => new Set());
   const [lastAddedId, setLastAddedId] = useState<string | null>(null);
   const lastAddedTimer = useRef<number | undefined>(undefined);
   const quickAddRef = useRef<HTMLInputElement>(null);
@@ -133,13 +135,33 @@ export default function App() {
       } else if (e.key === "x" || e.key === " ") {
         if (flat[selected]) {
           e.preventDefault();
-          toggleComplete(flat[selected].id);
+          completeTodo(flat[selected]);
         }
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flat, selected, editing]);
+
+  // Complete a task with a satisfying exit: the row strikes + glides out, then
+  // commits. Recurring tasks roll forward (stay), so they skip the animation.
+  const completeTodo = useCallback((todo: Todo) => {
+    const recurs = (todo.recurrence?.freq ?? "none") !== "none" && !!todo.dueAt;
+    if (todo.completedAt || recurs) {
+      toggleComplete(todo.id);
+      return;
+    }
+    setCompleting((s) => new Set(s).add(todo.id));
+    window.setTimeout(() => {
+      toggleComplete(todo.id);
+      setCompleting((s) => {
+        const n = new Set(s);
+        n.delete(todo.id);
+        return n;
+      });
+    }, 420);
+  }, []);
 
   const handleTagClick = (tag: string) => {
     setActiveTag((t) => (t === tag ? null : tag));
@@ -230,13 +252,7 @@ export default function App() {
           >
             <RefreshCw className={`size-4 ${syncing ? "animate-spin" : ""}`} />
           </button>
-          <button
-            onClick={toggleTheme}
-            title="Toggle theme"
-            className="rounded-lg p-2 text-[var(--color-text-dim)] transition-colors hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
-          >
-            {theme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
-          </button>
+          <ThemeMenu theme={theme} setTheme={setTheme} />
           <AccountMenu session={session} />
         </div>
       </header>
@@ -329,6 +345,8 @@ export default function App() {
                         todo={todo}
                         selected={index === selected}
                         flash={todo.id === lastAddedId}
+                        completing={completing.has(todo.id)}
+                        onToggle={() => completeTodo(todo)}
                         onSelect={() => setSelected(index)}
                         onOpen={() => setEditing(todo)}
                         onTagClick={handleTagClick}
@@ -390,8 +408,7 @@ export default function App() {
 
       <CommandPalette
         todos={todos}
-        theme={theme}
-        onToggleTheme={toggleTheme}
+        onToggleTheme={cycleTheme}
         onNew={() => quickAddRef.current?.focus()}
         onOpen={(t) => setEditing(t)}
       />

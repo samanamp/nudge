@@ -10,13 +10,16 @@ interface Props {
   todo: Todo;
   selected: boolean;
   flash?: boolean;
+  /** Mid completion exit-animation. */
+  completing?: boolean;
+  onToggle?: () => void;
   onSelect: () => void;
   onOpen: () => void;
   onTagClick?: (tag: string) => void;
 }
 
-export function TodoRow({ todo, selected, flash, onSelect, onOpen, onTagClick }: Props) {
-  const done = !!todo.completedAt;
+export function TodoRow({ todo, selected, flash, completing, onToggle, onSelect, onOpen, onTagClick }: Props) {
+  const done = !!todo.completedAt || !!completing;
   const recurs = (todo.recurrence?.freq ?? "none") !== "none";
   const overdue = todo.dueAt !== undefined && !done && isOverdue(todo.dueAt);
   const hasNag = todo.reminders.some((r) => r.type === "recurring");
@@ -31,9 +34,10 @@ export function TodoRow({ todo, selected, flash, onSelect, onOpen, onTagClick }:
       onMouseEnter={onSelect}
       onClick={onOpen}
       className={cn(
-        "group relative flex items-center gap-3 rounded-[var(--radius-row)] px-3 py-2 transition-colors duration-150",
+        "group relative flex items-center gap-3 overflow-hidden rounded-[var(--radius-row)] px-3 py-2 transition-colors duration-150",
         selected ? "bg-[var(--color-surface-2)]" : "hover:bg-[var(--color-surface)]",
         flash && "animate-flash",
+        completing && "animate-task-out pointer-events-none",
       )}
     >
       {/* Selection accent bar */}
@@ -44,7 +48,7 @@ export function TodoRow({ todo, selected, flash, onSelect, onOpen, onTagClick }:
         )}
       />
 
-      <Checkbox checked={done} onToggle={() => toggleComplete(todo.id)} />
+      <Checkbox checked={done} onToggle={onToggle ?? (() => toggleComplete(todo.id))} />
 
       <div className="min-w-0 flex-1">
         <div
