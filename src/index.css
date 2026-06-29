@@ -191,7 +191,10 @@ body {
   scrollbar-color: var(--color-border-strong) transparent;
 }
 
-/* Respect iOS safe areas for the mobile quick-add bar */
+/* Respect iOS safe areas in standalone/PWA display modes. */
+.safe-top {
+  padding-top: max(0px, env(safe-area-inset-top));
+}
 .safe-bottom {
   padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
 }
@@ -289,4 +292,3 @@ body {
 .control:disabled {
   opacity: 0.45;
 }
-

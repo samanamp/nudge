@@ -204,7 +204,7 @@ export default function App() {
   if (session.status === "out") return <SignInScreen onAuthed={session.refresh} />;
 
   return (
-    <div className="mx-auto flex min-h-full max-w-2xl flex-col px-4 sm:px-6">
+    <div className="safe-top mx-auto flex min-h-full max-w-2xl flex-col px-4 sm:px-6">
       <header className="flex items-center justify-between py-6">
         <div className="flex items-center gap-3">
           <div className="brand-mark grid size-9 place-items-center rounded-[11px] text-white">
